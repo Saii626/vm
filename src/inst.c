@@ -1,5 +1,5 @@
 
-#include <instructions.h>
+#include <inst.h>
 
 Inst create_inst0(Op type) {
 	return (Inst) { .op=type, .args={0} };

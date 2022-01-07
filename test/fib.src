@@ -1,0 +1,26 @@
+
+# Loop termination counter
+	load 		0 	0
+
+# Initial vals
+	load 		1 	0
+	load 		2 	1
+	
+	print 		1
+	print 		2
+	
+# Main generation loop
+loop:
+	add 		3 	[1] 	[2]
+	load 		1 	[2]
+	load 		2 	[3]
+	print 		3
+	
+# Check for loop termination
+	add 		0 	[0] 	1
+	eq 		4 	[0] 	15
+	cmp_jmp 	4 	:end 	:loop
+
+# Complete
+end:
+	halt

@@ -2,14 +2,23 @@ CC = cc
 CFLAGS = -Wall -std=c11 -pedantic -Wswitch-enum -g
 LIBS = -lm
 
-vm: vm.o instructions.o
-	${CC} ${CFLAGS} ${LIBS} -o vm vm.o instructions.o
+vm: vm.o inst.o executors.o
+	${CC} ${CFLAGS} ${LIBS} -o vm vm.o inst.o executors.o
 
-vm.o: ./src/vm.c ./include/instructions.h
+compiler: compiler.o
+	${CC} ${CFLAGS} ${LIBS} -o compiler compiler.o
+
+vm.o: ./src/vm.c
 	${CC} ${CFLAGS} -c -I ./include -o vm.o ./src/vm.c
 
-instructions.o: ./src/instructions.c
-	${CC} ${CFLAGS} -c -I ./include -o instructions.o ./src/instructions.c
+inst.o: ./src/inst.c
+	${CC} ${CFLAGS} -c -I ./include -o inst.o ./src/inst.c
+
+compiler.o: ./src/compiler.c
+	${CC} ${CFLAGS} -c -I ./include -o compiler.o ./src/compiler.c
+
+executors.o: ./src/executors.c
+	${CC} ${CFLAGS} -c -I ./include -o executors.o ./src/executors.c
 
 clean:
-	rm *.o vm
+	rm *.o vm compiler

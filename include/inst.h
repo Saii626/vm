@@ -1,4 +1,8 @@
 
+
+#ifndef __INST_H__
+#define __INST_H__
+
 #include <stdint.h>
 
 typedef struct {
@@ -38,3 +42,5 @@ Inst create_inst3(Op instruction_type, uint8_t a1, uint8_t a2, uint8_t a3);
 Inst parse_inst(const char* instruction);
 
 const char* describe(Inst* inst);
+
+#endif
