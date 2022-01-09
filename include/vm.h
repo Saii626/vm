@@ -7,15 +7,14 @@
 #include <stdbool.h>
 
 typedef struct {
-	Inst* inst;
-	size_t instCount;
+	Program program;
 	uint64_t ip;
 	bool isHalted;
 
 	uint64_t registers[256];
 } VM;
 
-void load_program_in_vm(VM* vm, Inst* inst, size_t instCount);
+void load_program_in_vm(VM* vm, Program program);
 
 void execute_program(VM* vm);
 

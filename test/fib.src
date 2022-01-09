@@ -1,25 +1,32 @@
 
+# Variable decl
+	var 	ct
+	var 	a
+	var 	b
+	var 	c
+	var 	cmp
+
 # Loop termination counter
-	load 		0 	0
+	load 		ct 	0
 
 # Initial vals
-	load 		1 	0
-	load 		2 	1
+	load 		a 	0
+	load 		b 	1
 	
-	print 		1
-	print 		2
+	debug_print	a
+	debug_print	b
 	
 # Main generation loop
 loop:
-	add 		3 	[1] 	[2]
-	load 		1 	[2]
-	load 		2 	[3]
-	print 		3
+	add 		c 	a 	b
+	load 		a 	b
+	load 		b 	c
+	debug_print	c
 	
 # Check for loop termination
-	add 		0 	[0] 	1
-	eq 		4 	[0] 	15
-	cmp_jmp 	4 	:end 	:loop
+	add 		ct 	ct 	1
+	eq 		cmp 	ct 	15
+	cmp_jmp 	cmp 	:end 	:loop
 
 # Complete
 end:

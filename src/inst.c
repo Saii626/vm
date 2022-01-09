@@ -17,11 +17,7 @@ Inst create_inst3(Op type, uint8_t a1, uint8_t a2, uint8_t a3) {
 	return (Inst) { .op=type, .args={a1, a2, a3} };
 }
 
-Inst parse_inst(const char* inst) {
-	return (Inst) { .op=OP_NOOP };
-}
-
-const char* describe(Inst* inst) {
+const char* describe(const Inst* inst) {
 	switch (inst->op) {
 		case OP_NOOP:			return "OP_NOOP";
 
@@ -44,4 +40,51 @@ const char* describe(Inst* inst) {
 		case OP_HALT: 			return "HALT";
 		default: 			return "unknown instruction";
 	} 
+}
+
+void debug_inst(const Inst* inst, char* debugStr, size_t strLen) {
+	switch (inst->op) {
+		case OP_NOOP:
+			snprintf(debugStr, strLen, "OP_NOOP");
+			break;
+		case OP_LOAD_CONST:
+			snprintf(debugStr, strLen, "OP_LOAD_CONST %u %u", inst->args[0], inst->args[1]);
+			break;
+		case OP_LOAD_REG:;
+			snprintf(debugStr, strLen, "OP_LOAD_REG %u %u", inst->args[0], inst->args[1]);
+			break;
+		case OP_JMP_CONST: 
+			snprintf(debugStr, strLen, "OP_JMP_CONST %i", *((int8_t*)&inst->args[0]));
+			break;
+		case OP_JMP_REG:
+			snprintf(debugStr, strLen, "OP_JMP_REG %u", inst->args[0]);
+			break;
+		case OP_CMP_JMP_CONST:
+			snprintf(debugStr, strLen, "OP_CMP_JMP_CONST %u %i %i", inst->args[0], *((int8_t*)&inst->args[1]), *((int8_t*)&inst->args[2]));
+			break;
+		case OP_CMP_JMP:
+			snprintf(debugStr, strLen, "OP_CMP_JMP_REG %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
+			break;
+		case OP_EQ_CONST:
+			snprintf(debugStr, strLen, "OP_EQ_CONST %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
+			break;
+		case OP_EQ_REG:
+			snprintf(debugStr, strLen, "OP_EQ_REG %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
+			break;
+		case OP_ADD_CONST:
+			snprintf(debugStr, strLen, "OP_ADD_CONST %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
+			break;
+		case OP_ADD_REG:
+			snprintf(debugStr, strLen, "OP_ADD_REG %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
+			break;
+		case OP_DEBUG_PRINT:
+			snprintf(debugStr, strLen, "OP_DEBUG_PRINT %u", inst->args[0]);
+			break;
+		case OP_HALT:;
+			snprintf(debugStr, strLen, "OP_HALT");
+			break;
+		default:
+			snprintf(debugStr, strLen, "Unknown instruction");
+			break;
+	}
 }

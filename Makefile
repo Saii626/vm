@@ -1,12 +1,15 @@
 CC = cc
-CFLAGS = -Wall -std=c11 -pedantic -Wswitch-enum -g
+CFLAGS = -Wall -std=c11 -pedantic -Wswitch-enum -g -Wextra -ggdb
 LIBS = -lm
+
+.PHONY: all
+all: vm compiler
 
 vm: vm.o inst.o executors.o
 	${CC} ${CFLAGS} ${LIBS} -o vm vm.o inst.o executors.o
 
 compiler: compiler.o
-	${CC} ${CFLAGS} ${LIBS} -o compiler compiler.o
+	${CC} ${CFLAGS} ${LIBS} -o compiler compiler.o inst.o
 
 vm.o: ./src/vm.c
 	${CC} ${CFLAGS} -c -I ./include -o vm.o ./src/vm.c
@@ -20,5 +23,6 @@ compiler.o: ./src/compiler.c
 executors.o: ./src/executors.c
 	${CC} ${CFLAGS} -c -I ./include -o executors.o ./src/executors.c
 
+.PHONY: clean
 clean:
 	rm *.o vm compiler
