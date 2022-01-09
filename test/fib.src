@@ -25,9 +25,10 @@ loop:
 	
 # Check for loop termination
 	add 		ct 	ct 	1
-	eq 		cmp 	ct 	15
+	eq 		cmp 	ct 	256
 	cmp_jmp 	cmp 	:end 	:loop
 
 # Complete
 end:
 	halt
+

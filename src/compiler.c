@@ -15,9 +15,9 @@ static Operand parse_operand(String_View str, String_View line, uint64_t lineNo)
 	} else if (sv_starts_with(trimmed, sv_from_cstr(":"))) {
 		sv_chop_left(&trimmed, 1);
 		return (Operand) { .type=LABEL, { .label=trimmed }, .lineNo=lineNo, .index=index };
-	} else if (isdigit(*trimmed.data)) {
+	} else if (isdigit(*trimmed.data) || (trimmed.count>1 && *trimmed.data == '-' && isdigit(*(trimmed.data+1)))) {
 		// TODO: Handle errors during parsing
-		return (Operand) { .type=CONST, { .constant=atoi(trimmed.data) }, .lineNo=lineNo, .index=index };
+		return (Operand) { .type=CONST, { .constant=atol(trimmed.data) }, .lineNo=lineNo, .index=index };
 	} else {
 		return (Operand) { .type=VAR, { .variable=trimmed }, .lineNo=lineNo, .index=index };
 	}
@@ -327,7 +327,7 @@ void compile_cmp_jmp(Program* program, Context* context, Operand arg1, Operand a
 	if (arg2.type == CONST || arg2.type == LABEL) {
 		op = OP_CMP_JMP_CONST;
 		if (!(arg3.type == CONST || arg3.type == LABEL)) {
-			fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand for cmp_jmp\n", CTX_DEBUG(context));
+			fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand for cmp_jmp. Expected Constant or Label, found %s\n", CTX_DEBUG(context), describe_operand_type(arg3.type));
 			exit(1);
 		}
 	} else if (arg2.type == VAR) {
@@ -459,18 +459,55 @@ void write_prog_to_file(const char* file_path, const char* disasm_file_path, con
 	}
 }
 
+static bool isNotDot(char ch) {
+	return ch != '.';
+}
+
+static char* get_file_with_extension(String_View file_path, String_View ext) {
+	sv_chop_right_while(&file_path, isNotDot);
+	char* newName = malloc(sizeof(char) * (file_path.count + ext.count + 1));
+	memcpy(newName, file_path.data, file_path.count);
+	memcpy(newName + (file_path.count), ext.data, ext.count);
+	newName[file_path.count + ext.count] = '\0';
+	return newName;
+}
+
 int main(int argc, char* argv[]) {
 
-	if (argc < 3) {
-		printf("Usage: %s <file_path.src> <output_file.vm> -d <disassembled.dbg>\n", argv[0]);
+	if (argc < 2) {
+		printf("Usage: %s <file_path.src> -o <output_file.vm> -d <disassembled.dbg>\n", argv[0]);
 		exit(1);
 	}
 
+	int index = 2;
+	const char* input_file = argv[1];
+
+	char* output_file = NULL;
 	char* disassemblyFile = NULL;
-	if (argc == 5 && !strcmp(argv[3], "-d")) {
-		disassemblyFile = argv[4];
+
+	while (argc > index) {
+		if (strcmp(argv[index], "-d") == 0) {
+			index += 1;
+			if (argc > index) {
+				disassemblyFile = argv[index];
+				index += 1;
+			} else {
+				disassemblyFile = get_file_with_extension(sv_from_cstr(input_file), sv_from_cstr("dbg"));
+			}
+		} else if (strcmp(argv[index], "-o") == 0) {
+			index += 1;
+			if (argc > index) {
+				output_file = argv[index];
+				index += 1;
+			} else {
+				output_file = get_file_with_extension(sv_from_cstr(input_file), sv_from_cstr("vm"));
+			}
+		}
+	} 
+	if (!output_file) {
+		output_file = get_file_with_extension(sv_from_cstr(input_file), sv_from_cstr("vm"));
 	}
 	
-	Program program = compile_file(argv[1]);
-	write_prog_to_file(argv[2], disassemblyFile, &program);
+	Program program = compile_file(input_file);
+	write_prog_to_file(output_file, disassemblyFile, &program);
 }

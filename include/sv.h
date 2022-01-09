@@ -65,6 +65,7 @@ SVDEF bool sv_try_chop_by_delim(String_View *sv, char delim, String_View *chunk)
 SVDEF String_View sv_chop_left(String_View *sv, size_t n);
 SVDEF String_View sv_chop_right(String_View *sv, size_t n);
 SVDEF String_View sv_chop_left_while(String_View *sv, bool (*predicate)(char x));
+SVDEF String_View sv_chop_right_while(String_View *sv, bool (*predicate)(char x));
 SVDEF bool sv_index_of(String_View sv, char c, size_t *index);
 SVDEF bool sv_eq(String_View a, String_View b);
 SVDEF bool sv_eq_ignorecase(String_View a, String_View b);
@@ -293,6 +294,16 @@ SVDEF String_View sv_chop_left_while(String_View *sv, bool (*predicate)(char x))
         i += 1;
     }
     return sv_chop_left(sv, i);
+}
+
+SVDEF String_View sv_chop_right_while(String_View *sv, bool (*predicate)(char x))
+{
+    size_t i = 0;
+    while (i < sv->count && predicate(sv->data[sv->count - i - 1])) {
+        i += 1;
+    }
+    sv->count -= i;
+    return sv_from_parts(sv->data + sv->count, i);
 }
 
 SVDEF String_View sv_take_left_while(String_View sv, bool (*predicate)(char x))

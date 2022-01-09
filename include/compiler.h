@@ -37,7 +37,7 @@ typedef enum {
 typedef struct {
 	OperandType type;
 	union {
-		uint8_t constant;
+		uint64_t constant;
 		String_View variable;
 		String_View label;
 	};
