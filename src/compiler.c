@@ -244,9 +244,15 @@ static uint8_t get_operand(Context* context, Operand operand, uint8_t* loc) {
 		case VAR:
 			val = get_register_for_variable(operand.variable, context);
 			break;
-		case CONST:
-			val = operand.constant;
-			break;
+		case CONST: {
+				uint64_t v = operand.constant;
+				if (v > UINT8_MAX) {
+					fprintf(stderr, ""CTX_DEBUG_FMT" Constant '%lu' too large to fit in 1 byte\n", CTX_DEBUG(context), v);
+					exit(1);
+				}
+				val = (uint8_t) v;
+				break;
+			}
 		case LABEL:
 			if (loc) {
 				process_unresolved_label(context, operand.label, loc);
