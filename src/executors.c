@@ -12,6 +12,12 @@ static void execute_load_const(VM* vm, uint8_t* args) {
 	vm->ip += 1;
 }
 
+static void execute_load_const2(VM* vm, uint8_t* args) {
+	uint16_t num = ((uint16_t)args[1]) << 8;
+	vm->registers[args[0]] = (num + args[2]);
+	vm->ip += 1;
+}
+
 static void execute_load_reg(VM* vm, uint8_t* args) {
 	vm->registers[args[0]] = vm->registers[args[1]];
 	vm->ip += 1;
@@ -66,6 +72,7 @@ executor executors[OPS_COUNT] = {
 	execute_noop,
 
 	execute_load_const,
+	execute_load_const2,
 	execute_load_reg,
 
 	execute_jmp_const,

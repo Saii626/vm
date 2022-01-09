@@ -22,6 +22,7 @@ const char* describe(const Inst* inst) {
 		case OP_NOOP:			return "OP_NOOP";
 
 		case OP_LOAD_CONST: 		return "OP_LOAD_CONST";
+		case OP_LOAD_CONST2: 		return "OP_LOAD_CONST2";
 		case OP_LOAD_REG: 		return "OP_LOAD_REG";
 
 		case OP_JMP_CONST: 		return "OP_JUMP_CONST";
@@ -50,6 +51,11 @@ void debug_inst(const Inst* inst, char* debugStr, size_t strLen) {
 		case OP_LOAD_CONST:
 			snprintf(debugStr, strLen, "OP_LOAD_CONST %u %u", inst->args[0], inst->args[1]);
 			break;
+		case OP_LOAD_CONST2: {
+			uint16_t num = ((uint16_t)inst->args[1]) << 8;
+			snprintf(debugStr, strLen, "OP_LOAD_CONST2 %u %u", inst->args[0], (num + inst->args[2]));
+			break;
+		     }
 		case OP_LOAD_REG:;
 			snprintf(debugStr, strLen, "OP_LOAD_REG %u %u", inst->args[0], inst->args[1]);
 			break;

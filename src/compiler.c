@@ -287,17 +287,31 @@ void compile_load(Program* program, Context* context, Operand arg1, Operand arg2
 	assert_operand(context, arg1, VAR);
 	assert_operand(context, arg3, NONE);
 
+	uint8_t p1 = 0;
+	uint8_t p2 = 0;
 	if (arg2.type == CONST) {
-		op = OP_LOAD_CONST;
+		uint64_t val = arg2.constant;
+
+		if (val <= UINT8_MAX) {
+			op = OP_LOAD_CONST;
+			p1 = get_operand(context, arg2, NULL);
+		} else if (val <= UINT16_MAX) {
+			op = OP_LOAD_CONST2;
+			p1 = *((uint8_t*)&val + 1);
+			p2 = *((uint8_t*)&val + 0);
+		} else {
+			fprintf(stderr, ""CTX_DEBUG_FMT" Too big constant\n", CTX_DEBUG(context));
+			exit(1);
+		}
 	} else if (arg2.type == VAR) {
 		op = OP_LOAD_REG;
+		p1 = get_operand(context, arg2, NULL);
 	} else {
 		fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand for load\n", CTX_DEBUG(context));
 		exit(1);
 	}
 	uint8_t dest = get_operand(context, arg1, NULL);
-	uint8_t src = get_operand(context, arg2, NULL);
-	Inst i = (Inst) { .op=op, .args={dest, src, 0} };
+	Inst i = (Inst) { .op=op, .args={dest, p1, p2} };
 	vector_push_back(*program, i);
 }
 

@@ -18,6 +18,7 @@ typedef enum {
 	OP_NOOP = 0,
 
 	OP_LOAD_CONST,
+	OP_LOAD_CONST2,
 	OP_LOAD_REG,
 
 	OP_JMP_CONST,
