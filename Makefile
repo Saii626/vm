@@ -26,3 +26,4 @@ executors.o: ./src/executors.c
 .PHONY: clean
 clean:
 	rm *.o vm compiler
+	rm ./test/*.vm ./test/*.dbg

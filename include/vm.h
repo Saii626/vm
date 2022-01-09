@@ -14,8 +14,8 @@ typedef struct {
 	uint64_t registers[256];
 } VM;
 
-void load_program_in_vm(VM* vm, Program program);
+Program load_program_from_file(const char* file_path);
 
-void execute_program(VM* vm);
+void execute_program(VM* vm, Program program);
 
 #endif

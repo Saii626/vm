@@ -82,7 +82,6 @@ Program compile_file(const char* file_path) {
 		size_t n = fread(file_contents, 1, size * sizeof(char), file);
 		if (n != (size_t)size) {
 			fprintf(stderr, "Unable to read file %s, %s\n", file_path, strerror(errno));
-			fprintf(stderr, "Read %lu bytes, expected %lu bytes\n", n, size);
 			fclose(file);
 			exit(1);
 		}
@@ -339,7 +338,8 @@ void compile_cmp_jmp(Program* program, Context* context, Operand arg1, Operand a
 		exit(1);
 	}
 
-	Inst i = (Inst) { .op=op, .args={0} };
+	uint8_t dest = get_operand(context, arg1, NULL);
+	Inst i = (Inst) { .op=op, .args={dest, 0, 0} };
 	vector_push_back(*program, i);
 	get_operand(context, arg2, &((*program)[vector_size(*program) - 1].args[1]));
 	get_operand(context, arg3, &((*program)[vector_size(*program) - 1].args[2]));
