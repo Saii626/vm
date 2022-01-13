@@ -1,6 +1,0 @@
-
-var a
-
-load a 260
-debug_print a
-halt

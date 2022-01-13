@@ -21,7 +21,7 @@ static char* get_file_with_extension(String_View file_path, String_View ext) {
 }
 // --CODE DUPLICATION END--
 
-static void debug_write_program(Program* program, const char* file_path) {
+static void debug_write_program(const Program* program, const char* file_path) {
 	FILE* file = fopen(file_path, "w");
 	if (file == NULL) {
 		fprintf(stderr, "Unable to open file %s, %s\n", file_path, strerror(errno));

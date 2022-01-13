@@ -3,9 +3,9 @@ CFLAGS = -Wall -std=c11 -pedantic -Wswitch-enum -g -Wextra -ggdb
 LIBS = -lm
 
 .PHONY: all
-all: compiler decompiler
+all: vm compiler decompiler
 
-vm: vm.o inst.o executors.o
+vm: vm.o inst.o
 	${CC} ${CFLAGS} ${LIBS} -o $@ $^
 
 compiler: compiler.o inst.o
@@ -24,9 +24,6 @@ compiler.o: ./src/compiler.c
 	${CC} ${CFLAGS} -c -I ./include -o $@ $<
 
 decompiler.o: ./src/decompiler.c
-	${CC} ${CFLAGS} -c -I ./include -o $@ $<
-
-executors.o: ./src/executors.c
 	${CC} ${CFLAGS} -c -I ./include -o $@ $<
 
 .PHONY: clean

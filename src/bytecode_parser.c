@@ -1,7 +1,3 @@
-
-#ifndef __BYTECODE_PARSER_H__
-#define __BYTECODE_PARSER_H__
-
 #include <inst.h>
 #include <vector.h>
 #include <errno.h>
@@ -59,5 +55,3 @@ Program* load_program_from_file(const char* file_path) {
 
 	return program;
 }
-
-#endif

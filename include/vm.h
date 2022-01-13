@@ -7,15 +7,11 @@
 #include <stdbool.h>
 
 typedef struct {
-	Program program;
-	uint64_t ip;
 	bool isHalted;
-
 	uint64_t registers[UINT8_MAX + 1];
 } VM;
 
-Program load_program_from_file(const char* file_path);
 
-void execute_program(VM* vm, Program program);
+void execute_program(VM* vm, const Program* program);
 
 #endif

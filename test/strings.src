@@ -11,8 +11,8 @@ load c "2nd string"
 load d 45.937
 
 print_string a
-print_const b
+print_reg b
 
 print_string c
-print_const d
+print_reg d
 halt

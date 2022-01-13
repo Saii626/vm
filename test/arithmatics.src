@@ -1,0 +1,24 @@
+
+
+var a
+var b
+var c
+
+# Additions
+load a 5
+load b 10
+umul c a b
+print_reg c
+
+load a -27
+load b 26
+sadd c a b
+print_reg c
+
+load a 0.45
+load b 4.98
+div c b a
+print_reg c
+
+halt
+

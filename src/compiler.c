@@ -90,7 +90,6 @@ static int resolve_labels(void* const context, struct hashmap_element_s* const e
 			uint64_t currIndex = ((void*)toReplace - (void*)(ctx->program->instructions)) / sizeof(Inst);
 #pragma GCC diagnostic pop
 			int64_t diff = index - currIndex;
-			fprintf(stderr, "label: "SV_Fmt" index: %lu, currIndex: %lu\n", SV_Arg(key), index, currIndex);
 
 			if (diff >= INT16_MIN && diff <=INT16_MAX) {
 				uint16_t udiff = (uint16_t) diff;
@@ -148,7 +147,7 @@ static uint16_t resolve_constant(int64_t value, Context* context, bool force1Byt
 }
 
 static uint16_t resolve_string(String_View value, Context* context) {
-	void* p = hashmap_get(&context->constants, value.data, value.count);
+	void* p = hashmap_get(&context->strings, value.data, value.count);
 	if (!p) {
 		if (context->strings_index == UINT16_MAX) {
 			fprintf(stderr, ""CTX_DEBUG_FMT" No more space for strings left\n", CTX_DEBUG(context));
@@ -162,7 +161,7 @@ static uint16_t resolve_string(String_View value, Context* context) {
 		uint16_t index = context->strings_index++;
 
 		p = (void*)((uint64_t)index + 1);
-		hashmap_put(&context->constants, value.data, value.count, p);
+		hashmap_put(&context->strings, value.data, value.count, p);
 	}
 
 	return (uint16_t)((uint64_t) p - 1);
@@ -186,7 +185,7 @@ static InstVariant resolve_one_byte_arg(Context* context, Operand operand, uint8
 			break;
 		case CONST_I: {
 				int64_t v = operand.integer;
-				if (v > UINT8_MAX || v < INT8_MIN) {
+				if (v > INT8_MAX || v < INT8_MIN) {
 					val = (uint8_t)resolve_constant(v, context, true);
 					variant = CONST;
 				} else {
@@ -232,12 +231,12 @@ static InstVariant resolve_two_byte_arg(Context* context, Operand operand, uint8
 			variant = REG;
 			break;
 		case CONST_I: {
-				uint64_t v = operand.integer;
-				if (v > UINT16_MAX) {
+				int64_t v = operand.integer;
+				if (v > INT16_MAX || v < INT16_MIN) {
 					val = resolve_constant(v, context, false);
 					variant = CONST;
 				} else {
-					val = (uint16_t) v;
+					val = (uint16_t)((int16_t) v);
 					variant = IMPLICIT;
 				}
 				break;
@@ -378,7 +377,6 @@ static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Oper
 } 													\
 
 COMPILE_DEBUG_PRINT(print_reg, OP_DEBUG_REG)
-COMPILE_DEBUG_PRINT(print_const, OP_DEBUG_CONSTANT)
 COMPILE_DEBUG_PRINT(print_string, OP_DEBUG_STRING)
 
 static void compile_halt(Context* context, Operand arg1, Operand arg2, Operand arg3) {
@@ -605,7 +603,6 @@ Program* compile_file(const char* file_path) {
 					TRY_COMPILE(div)
 
 					TRY_COMPILE(print_reg)
-					TRY_COMPILE(print_const)
 					TRY_COMPILE(print_string)
 
 					TRY_COMPILE(halt)

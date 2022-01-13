@@ -7,31 +7,7 @@
 #include <stdio.h>
 #include <vector.h>
 
-typedef struct {
-	uint8_t op;
-	uint8_t args[3];
-} Inst;
-
-typedef struct {
-	uint64_t instructionsCount;
-	uint64_t constantsCount;
-	uint64_t stringsCount;
-	uint64_t stringsSize;
-} ProgramHeader;
-
-typedef struct {
-	const char* str;
-	size_t len;
-} String;
-
-typedef struct {
-	ProgramHeader header;
-	Inst* instructions;
-	uint64_t constants[UINT16_MAX + 1];
-	String strings[UINT16_MAX + 1];
-} Program;
-
-typedef enum {
+typedef enum __attribute__((__packed__)) {
 	OP_NOOP = 0,
 	// ------------------------------------------------------------------	
 	
@@ -45,6 +21,7 @@ typedef enum {
 	OP_LOAD_IMPLICIT,
 	OP_LOAD_CONST,
 	OP_LOAD_REG,
+	OP_LOAD_STR,
 	// ------------------------------------------------------------------	
 
 
@@ -178,19 +155,44 @@ typedef enum {
 
 	// Debug prints
 	OP_DEBUG_STRING,
-	OP_DEBUG_CONSTANT,
 	OP_DEBUG_REG,
 
 	OP_HALT, // Must be last element
 } Op;
 
 #define OPS_COUNT (OP_HALT + 1)
+
+typedef struct {
+	Op op;
+	uint8_t args[3];
+} Inst;
+
+typedef struct {
+	uint64_t instructionsCount;
+	uint64_t constantsCount;
+	uint64_t stringsCount;
+	uint64_t stringsSize;
+} ProgramHeader;
+
+typedef struct {
+	const char* str;
+	size_t len;
+} String;
+
+typedef struct {
+	ProgramHeader header;
+	Inst* instructions;
+	uint64_t constants[UINT16_MAX + 1];
+	String strings[UINT16_MAX + 1];
+} Program;
+
+
+static_assert(sizeof(Inst)==4, "Unexpected size of INST");
 #define INST_SIZE sizeof(Inst)
 #define MAX_INST_SIZE 1024
 
 #define UINT16_ARG(arg1, arg2) ((((uint16_t)(arg2)) << 8LL) + (arg1))
 
-static_assert(sizeof(Inst)==4, "Unexpected size of INST");
 
 inline Inst create_inst0(Op type) {
 	return (Inst) { .op=type, .args={0} };
