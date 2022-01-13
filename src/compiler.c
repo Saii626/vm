@@ -5,51 +5,467 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <inttypes.h>
 
-static Operand parse_operand(String_View str, String_View line, uint64_t lineNo) {
-	String_View trimmed = sv_trim(str);
-
-	uint64_t index = trimmed.data - line.data;
-	if (trimmed.count == 0) {
-		return (Operand) { .type=NONE, { .constant=0 }, .lineNo=lineNo, .index=index };
-	} else if (sv_starts_with(trimmed, sv_from_cstr(":"))) {
-		sv_chop_left(&trimmed, 1);
-		return (Operand) { .type=LABEL, { .label=trimmed }, .lineNo=lineNo, .index=index };
-	} else if (isdigit(*trimmed.data) || (trimmed.count>1 && *trimmed.data == '-' && isdigit(*(trimmed.data+1)))) {
-		// TODO: Handle errors during parsing
-		return (Operand) { .type=CONST, { .constant=atol(trimmed.data) }, .lineNo=lineNo, .index=index };
-	} else {
-		return (Operand) { .type=VAR, { .variable=trimmed }, .lineNo=lineNo, .index=index };
-	}
-}
-
-#define TRY_COMPILE(op) \
-	else if (sv_eq(baseInst, sv_from_cstr(#op))) {								\
-		sv_chop_left_while(&inst, isBlank); 							\
-		String_View i1 = sv_chop_left_while(&inst, isNotBlank); 					\
-									\
-		sv_chop_left_while(&inst, isBlank); 							\
-		String_View i2 = sv_chop_left_while(&inst, isNotBlank); 					\
-									\
-		sv_chop_left_while(&inst, isBlank); 							\
-		String_View i3 = sv_chop_left_while(&inst, isNotBlank); 					\
-														\
-		Operand op1 = parse_operand(i1, line, context.lineNo); 	\
-		Operand op2 = parse_operand(i2, line, context.lineNo); 	\
-		Operand op3 = parse_operand(i3, line, context.lineNo); 	\
-		compile_##op(&program, &context, op1, op2, op3); 						\
-	} 													\
+extern Inst create_inst0(Op type);
 
 static bool isNotBlank(char ch) {
 	return !isblank(ch);
 }
 
-static bool isBlank(char ch) {
-	return isblank(ch);
+//static bool isBlank(char ch) {
+//	return isblank(ch);
+//}
+
+// --CODE DUPLICATION START--
+static bool isNotDot(char ch) {
+	return ch != '.';
+}
+// --CODE DUPLICATION END--
+
+static bool isNotQuote(char ch) {
+	return ch != '"';
+}
+
+static Operand chop_operand(String_View* str, String_View line, uint64_t lineNo) {
+	*str = sv_trim_left(*str);
+
+	uint64_t index = str->data - line.data;
+	if (str->count == 0) {
+		return (Operand) { .type=NONE, { .integer=0 }, .lineNo=lineNo, .index=index };
+	}
+	else if (sv_starts_with(*str, sv_from_cstr(":"))) {
+		sv_chop_left(str, 1);
+		String_View name = sv_chop_left_while(str, isNotBlank); 					\
+		return (Operand) { .type=LABEL, { .label=name }, .lineNo=lineNo, .index=index };
+	}
+	else if (sv_starts_with(*str, sv_from_cstr("\""))) {
+		sv_chop_left(str, 1); // chop left "
+		String_View string = sv_chop_left_while(str, isNotQuote);
+		sv_chop_left(str, 1); // chop right "
+		return (Operand) { .type=STR, { .string=string }, .lineNo=lineNo, .index=index };
+	}
+	else if (isalpha(*str->data)){
+		String_View name = sv_chop_left_while(str, isNotBlank); 					\
+		return (Operand) { .type=VAR, { .variable=name }, .lineNo=lineNo, .index=index };
+	}
+	else {
+		String_View number = sv_chop_left_while(str, isNotBlank); 					\
+		char* lastPos;
+		uint64_t num = (uint64_t) strtol(number.data, &lastPos, 0);
+		if (*lastPos != '.') {
+			return (Operand) { .type=CONST_I, { .integer=num }, .lineNo=lineNo, .index=index };
+		} else {
+			double num1 = strtod(number.data, NULL);
+			return (Operand) { .type=CONST_F, { .floating=num1 }, .lineNo=lineNo, .index=index };
+		}
+	}
+}
+
+#define TRY_COMPILE(op) \
+	else if (sv_eq(baseInst, sv_from_cstr(#op))) {								\
+		Operand op1 = chop_operand(&inst, line, context.lineNo); 	\
+		Operand op2 = chop_operand(&inst, line, context.lineNo); 	\
+		Operand op3 = chop_operand(&inst, line, context.lineNo); 	\
+		compile_##op(&context, op1, op2, op3); 						\
+	} 													\
+
+static int resolve_labels(void* const context, struct hashmap_element_s* const e) {
+	String_View key = sv_from_parts(e->key, e->key_len);
+
+	Context* ctx = context;
+
+	void* label = hashmap_get(&ctx->labels, key.data, key.count);
+	if (label == NULL) {
+		fprintf(stderr, "No '"SV_Fmt"' label found\n", SV_Arg(key));
+		exit(1);
+	} else {
+		uint64_t index = (uint64_t) label;
+
+		for (size_t i=0; i<vector_size(e->data); ++i) {
+			uint8_t* toReplace = ((uint8_t**)e->data)[i];
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpointer-arith"
+			uint64_t currIndex = ((void*)toReplace - (void*)(ctx->program->instructions)) / sizeof(Inst);
+#pragma GCC diagnostic pop
+			int64_t diff = index - currIndex;
+			fprintf(stderr, "label: "SV_Fmt" index: %lu, currIndex: %lu\n", SV_Arg(key), index, currIndex);
+
+			if (diff >= INT16_MIN && diff <=INT16_MAX) {
+				uint16_t udiff = (uint16_t) diff;
+				*toReplace = (uint8_t) udiff;
+				*(toReplace + 1) = (uint8_t) (udiff >> 8);
+			} else {
+				fprintf(stderr, "Jump size %li too large to fit in 16 bytes\n", (int64_t)diff);
+				exit(1);
+			}
+		}
+	}
+
+	return 0;
+}
+
+static uint8_t resolve_variable(String_View name, Context* context) {
+	void* p = hashmap_get(&context->variables, name.data, name.count);
+	if (p) {
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wvoid-pointer-to-int-cast"
+		return ((uint8_t) p) - 1;
+#pragma GCC diagnostic pop
+	} else {
+		fprintf(stderr, ""CTX_DEBUG_FMT" No '"SV_Fmt"' variable declared\n", CTX_DEBUG(context), SV_Arg(name));
+		exit(1);
+	}
+}
+
+static uint16_t resolve_constant(int64_t value, Context* context, bool force1Byte) {
+	char number[64];
+	snprintf(number, sizeof(number), "%li", value);
+	size_t size = strlen(number);
+
+	void* p = hashmap_get(&context->constants, number, size);
+	if (!p) {
+		if (context->constants_index == UINT16_MAX) {
+			fprintf(stderr, ""CTX_DEBUG_FMT" No more space for constants left\n", CTX_DEBUG(context));
+			exit(1);
+		}
+
+		if (force1Byte && context->constants_index >= UINT8_MAX) {
+			fprintf(stderr, ""CTX_DEBUG_FMT" Unable to resolve constant to 1 byte index\n", CTX_DEBUG(context));
+			exit(1);
+		}
+
+		context->program->constants[context->constants_index] = value;
+		uint16_t index = context->constants_index++;
+
+		p = (void*)((uint64_t)index + 1);
+		hashmap_put(&context->constants, number, size, p);
+	}
+
+	return (uint16_t)((uint64_t) p - 1);
+}
+
+static uint16_t resolve_string(String_View value, Context* context) {
+	void* p = hashmap_get(&context->constants, value.data, value.count);
+	if (!p) {
+		if (context->strings_index == UINT16_MAX) {
+			fprintf(stderr, ""CTX_DEBUG_FMT" No more space for strings left\n", CTX_DEBUG(context));
+			exit(1);
+		}
+
+		char* str = malloc(sizeof(char) * value.count);
+		memcpy(str, value.data, value.count);
+
+		context->program->strings[context->strings_index] = (String) { .str=str, .len=value.count };
+		uint16_t index = context->strings_index++;
+
+		p = (void*)((uint64_t)index + 1);
+		hashmap_put(&context->constants, value.data, value.count, p);
+	}
+
+	return (uint16_t)((uint64_t) p - 1);
+}
+
+void resolve_all_symbols(Context* context) {
+	hashmap_iterate_pairs(&context->unresolvedLabels, resolve_labels, context);
+}
+
+static InstVariant resolve_one_byte_arg(Context* context, Operand operand, uint8_t* loc) {
+	uint8_t val = 0;
+	InstVariant variant = IMPLICIT;
+
+	switch (operand.type) {
+		case NONE:
+			fprintf(stderr, ""CTX_DEBUG_FMT" Operand expected but not found\n", CTX_DEBUG(context));
+			exit(1);
+		case VAR:
+			val = resolve_variable(operand.variable, context);
+			variant = REG;
+			break;
+		case CONST_I: {
+				int64_t v = operand.integer;
+				if (v > UINT8_MAX || v < INT8_MIN) {
+					val = (uint8_t)resolve_constant(v, context, true);
+					variant = CONST;
+				} else {
+					val = (uint8_t) v;
+					variant = IMPLICIT;
+				}
+				break;
+			}
+		case CONST_F: {
+				double v = operand.floating;
+				val = (uint8_t)resolve_constant(*(uint64_t*)&v, context, true);
+				variant = CONST;
+				break;
+			}
+		case LABEL:
+			fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected label\n", CTX_DEBUG(context));
+			exit(1);
+		case STR:
+			fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected String\n", CTX_DEBUG(context));
+			exit(1);
+		default:
+			fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand\n", CTX_DEBUG(context));
+			exit(1);
+	}
+
+	if (loc) {
+		*loc = val;
+	}
+
+	return variant;
+}
+
+static InstVariant resolve_two_byte_arg(Context* context, Operand operand, uint8_t* loc) {
+	uint16_t val = 0;
+	InstVariant variant = IMPLICIT;
+
+	switch (operand.type) {
+		case NONE:
+			fprintf(stderr, ""CTX_DEBUG_FMT" Operand expected but not found\n", CTX_DEBUG(context));
+			exit(1);
+		case VAR:
+			val = resolve_variable(operand.variable, context);
+			variant = REG;
+			break;
+		case CONST_I: {
+				uint64_t v = operand.integer;
+				if (v > UINT16_MAX) {
+					val = resolve_constant(v, context, false);
+					variant = CONST;
+				} else {
+					val = (uint16_t) v;
+					variant = IMPLICIT;
+				}
+				break;
+			}
+		case CONST_F: {
+				double v = operand.floating;
+				val = resolve_constant(*(uint64_t*)&v, context, false);
+				variant = CONST;
+				break;
+			}
+		case STR: {
+				val = resolve_string(operand.string, context);
+				variant = STRING;
+				break;
+			}
+		case LABEL:
+			if (loc) {
+				uint8_t** usages = hashmap_get(&context->unresolvedLabels, operand.label.data, operand.label.count);
+				vector_push_back(usages, loc);
+				hashmap_put(&context->unresolvedLabels, operand.label.data, operand.label.count, usages);
+				val = 0;
+				variant = IMPLICIT;
+			} else {
+				fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected label\n", CTX_DEBUG(context));
+				exit(1);
+			}
+			break;
+		default:
+			fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand\n", CTX_DEBUG(context));
+			exit(1);
+	}
+
+	if (loc) {
+		*loc = (uint8_t)val;
+		*(loc + 1) = (uint8_t) (val >> 8);
+	}
+	return variant;
+}
+
+static void assert_operand(Context* ctx, Operand op, OperandType type) {
+	if (op.type != type) {
+		fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand. expected %s, found %s\n", ctx->fileName, ctx->lineNo, op.index, describe_operand_type(type), describe_operand_type(op.type));
+		exit(1);
+	}
+}
+
+static Inst* insert_inst_at_end(Context* context, Inst inst) {
+	Inst* inst_vector = context->program->instructions;
+	vector_push_back(inst_vector, inst);
+	context->program->instructions = inst_vector;
+	return &inst_vector[vector_size(inst_vector)-1];
+}
+
+static void compile_noop(Context* context, Operand arg1, Operand arg2, Operand arg3) {
+	assert_operand(context, arg1, NONE);
+	assert_operand(context, arg2, NONE);
+	assert_operand(context, arg3, NONE);
+	insert_inst_at_end(context, create_inst0(OP_NOOP));
+}
+
+#define ARG_LOC(arg) ((uint8_t*)inst + (arg) + 1)
+
+static void compile_load(Context* context, Operand arg1, Operand arg2, Operand arg3) {
+	Inst* inst = insert_inst_at_end(context, create_inst0(OP_LOAD_IMPLICIT));
+
+	assert_operand(context, arg1, VAR);
+	assert_operand(context, arg3, NONE);
+
+	resolve_one_byte_arg(context, arg1, ARG_LOC(0));
+	InstVariant variant = resolve_two_byte_arg(context, arg2, ARG_LOC(1));
+	inst->op += variant;
+}
+
+static void compile_jmp(Context* context, Operand arg1, Operand arg2, Operand arg3) {
+	Inst* inst = insert_inst_at_end(context, create_inst0(OP_JMP_IMPLICIT));
+
+	assert_operand(context, arg2, NONE);
+	assert_operand(context, arg3, NONE);
+
+	InstVariant variant = resolve_two_byte_arg(context, arg1, ARG_LOC(0));
+	inst->op += variant;
+}
+
+#define COMPILE_CONDITIONAL_JMP(fn_name, op_name) 							\
+static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Operand arg3) { 		\
+	Inst* inst = insert_inst_at_end(context, create_inst0( (op_name) )); 				\
+													\
+	assert_operand(context, arg1, VAR); 								\
+	assert_operand(context, arg3, NONE); 								\
+													\
+	resolve_one_byte_arg(context, arg1, ARG_LOC(0)); 						\
+	InstVariant variant = resolve_two_byte_arg(context, arg2, ARG_LOC(1)); 				\
+	inst->op += variant; 										\
+} 													\
+
+COMPILE_CONDITIONAL_JMP(jze, OP_JMP_ZE_IMPLICIT)
+COMPILE_CONDITIONAL_JMP(jnz, OP_JMP_NZ_IMPLICIT)
+COMPILE_CONDITIONAL_JMP(jgt, OP_JMP_GT_IMPLICIT)
+COMPILE_CONDITIONAL_JMP(jlt, OP_JMP_LT_IMPLICIT)
+COMPILE_CONDITIONAL_JMP(jge, OP_JMP_GE_IMPLICIT)
+COMPILE_CONDITIONAL_JMP(jle, OP_JMP_LE_IMPLICIT)
+
+#define COMPILE_BINARY_OPERATION(fn_name, op_name) 							\
+static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Operand arg3) { 		\
+	Inst* inst = insert_inst_at_end(context, create_inst0( (op_name) )); 				\
+													\
+	assert_operand(context, arg1, VAR); 								\
+	assert_operand(context, arg2, VAR); 								\
+													\
+	resolve_one_byte_arg(context, arg1, ARG_LOC(0)); 						\
+	resolve_one_byte_arg(context, arg2, ARG_LOC(1)); 						\
+	InstVariant variant = resolve_one_byte_arg(context, arg3, ARG_LOC(2)); 				\
+	inst->op += variant; 										\
+} 													\
+
+COMPILE_BINARY_OPERATION(sadd, OP_SADD_IMPLICIT)
+COMPILE_BINARY_OPERATION(ssub, OP_SSUB_IMPLICIT)
+COMPILE_BINARY_OPERATION(smul, OP_SMUL_IMPLICIT)
+COMPILE_BINARY_OPERATION(sdiv, OP_SDIV_IMPLICIT)
+COMPILE_BINARY_OPERATION(uadd, OP_UADD_IMPLICIT)
+COMPILE_BINARY_OPERATION(usub, OP_USUB_IMPLICIT)
+COMPILE_BINARY_OPERATION(umul, OP_UMUL_IMPLICIT)
+COMPILE_BINARY_OPERATION(udiv, OP_UDIV_IMPLICIT)
+
+COMPILE_BINARY_OPERATION(add,  OP_ADD_IMPLICIT_UNUSED)
+COMPILE_BINARY_OPERATION(sub,  OP_SUB_IMPLICIT_UNUSED)
+COMPILE_BINARY_OPERATION(mul,  OP_MUL_IMPLICIT_UNUSED)
+COMPILE_BINARY_OPERATION(div,  OP_DIV_IMPLICIT_UNUSED)
+
+#define COMPILE_DEBUG_PRINT(fn_name, op_name) 								\
+static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Operand arg3) { 			\
+	assert_operand(context, arg1, VAR); 								\
+	assert_operand(context, arg2, NONE); 								\
+	assert_operand(context, arg3, NONE); 								\
+													\
+	Inst* inst = insert_inst_at_end(context, create_inst0( (op_name) )); 				\
+	resolve_two_byte_arg(context, arg1, ARG_LOC(0)); 						\
+} 													\
+
+COMPILE_DEBUG_PRINT(print_reg, OP_DEBUG_REG)
+COMPILE_DEBUG_PRINT(print_const, OP_DEBUG_CONSTANT)
+COMPILE_DEBUG_PRINT(print_string, OP_DEBUG_STRING)
+
+static void compile_halt(Context* context, Operand arg1, Operand arg2, Operand arg3) {
+	assert_operand(context, arg1, NONE);
+	assert_operand(context, arg2, NONE);
+	assert_operand(context, arg3, NONE);
+
+	insert_inst_at_end(context, create_inst0(OP_HALT));
+}
+
+const char* describe_operand_type(OperandType type) {
+	switch (type) {
+		case NONE: return "None";
+		case VAR: return "Variable";
+		case CONST_I: return "Integer";
+		case CONST_F: return "Floating";
+		case LABEL: return "Label";
+		case STR: return "String";
+		default: return "Unknown operand";
+	}
+}
+
+void finaize_program(Context* context) {
+	resolve_all_symbols(context);
+
+	Program* program = context->program;
+	program->header.instructionsCount = vector_size(program->instructions);
+	program->header.constantsCount = context->constants_index;
+	program->header.stringsCount = context->strings_index;
+
+	uint64_t totalStringSize = 0;
+	for (size_t i=0; i<context->strings_index; i++) {
+		String s = program->strings[i];
+		totalStringSize += s.len;
+	}
+
+	program->header.stringsSize = totalStringSize;
+}
+
+void write_prog_to_file(const char* file_path, const Program* program) {
+	{
+		FILE* file = fopen(file_path, "wb");
+		if (file == NULL) {
+			fprintf(stderr, "Unable to open file %s, %s\n", file_path, strerror(errno));
+			exit(1);
+		}
+
+		if (fwrite(&program->header, sizeof(ProgramHeader), 1, file) != 1) {
+			fprintf(stderr, "Unable to write ProgramHeader to file %s, %s\n", file_path, strerror(errno));
+			exit(1);
+		}
+
+		size_t noOfInst = program->header.instructionsCount;
+		size_t itemsWrote = fwrite(program->instructions, sizeof(Inst), noOfInst, file);
+		if (itemsWrote != noOfInst) {
+			fprintf(stderr, "Unable to write Instructions to file %s, %s\n", file_path, strerror(errno));
+			exit(1);
+		}
+
+		size_t noOfConst = program->header.constantsCount;
+		itemsWrote = fwrite(program->constants, sizeof(uint64_t), noOfConst, file);
+		if (itemsWrote != noOfConst) {
+			fprintf(stderr, "Unable to write Constant to file %s, %s\n", file_path, strerror(errno));
+			exit(1);
+		}
+
+		size_t noOfString = program->header.stringsCount;
+		for (size_t i=0; i<noOfString; i++) {
+			String s = program->strings[i];
+			if (fwrite(&s.len, sizeof(uint64_t), 1, file) != 1) {
+				fprintf(stderr, "Unable to write String to file %s, %s\n", file_path, strerror(errno));
+				exit(1);
+			}
+
+			itemsWrote = fwrite(s.str, sizeof(char), s.len, file);
+			if (itemsWrote != s.len) {
+				fprintf(stderr, "Unable to write String to file %s, %s\n", file_path, strerror(errno));
+				exit(1);
+			}
+		}
+
+		fclose(file);
+	}
 }
 
 
-Program compile_file(const char* file_path) {
+Program* compile_file(const char* file_path) {
 	// Open the input file and read its contents
 	char* file_contents;
 	{
@@ -91,6 +507,9 @@ Program compile_file(const char* file_path) {
 	// Create and initialize a new Context for compilation
 	Context context = {0};
 	context.fileName = file_path;
+
+	Program* program = malloc(sizeof(Program));
+	context.program = program;
 	{
 		if (0 != hashmap_create(pow(2, 10), &context.labels)) {
 			fprintf(stderr, "Unable to create label hashmap\n");
@@ -106,11 +525,17 @@ Program compile_file(const char* file_path) {
 			fprintf(stderr, "Unable to create unresolved hashmap\n");
 			exit(1);
 		}
-
+		if (0 != hashmap_create(pow(2, 10), &context.constants)) {
+			fprintf(stderr, "Unable to create constants hashmap\n");
+			exit(1);
+		}
+		if (0 != hashmap_create(pow(2, 10), &context.strings)) {
+			fprintf(stderr, "Unable to create strings hashmap\n");
+			exit(1);
+		}
 	}
 
 	// Compile the program
-	Program program = NULL;
 	{
 		String_View contents = sv_from_cstr(file_contents);
 		
@@ -136,28 +561,53 @@ Program compile_file(const char* file_path) {
 							fprintf(stderr, ""CTX_DEBUG_FMT" Variable '"SV_Fmt"' redefined\n", CTX_DEBUG(&context), SV_Arg(varName));
 							exit(1);
 						}
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wint-to-void-pointer-cast"
 						hashmap_put(&context.variables, varName.data, varName.count, (void*)++context.reg_index);
+#pragma GCC diagnostic pop
 						if (context.reg_index == UINT8_MAX) {
 							fprintf(stderr, ""CTX_DEBUG_FMT" Register capacity reached. Unable to declare anymore variables\n", CTX_DEBUG(&context));
 							exit(1);
 						}
-					} else if (sv_ends_with(baseInst, sv_from_cstr(":"))){ // after chopping the alphaneumeric part, only : is left in the inst
+					} else if (sv_ends_with(baseInst, sv_from_cstr(":"))){
 						sv_chop_right(&baseInst, 1);
 
 						if (hashmap_get(&context.labels, baseInst.data, baseInst.count) != NULL) {
 							fprintf(stderr, ""CTX_DEBUG_FMT" Label '"SV_Fmt"' redefined\n", CTX_DEBUG(&context), SV_Arg(baseInst));
 							exit(1);
 						}
-						hashmap_put(&context.labels, baseInst.data, baseInst.count, (void*)(vector_size(program)));
+						hashmap_put(&context.labels, baseInst.data, baseInst.count, (void*)(vector_size(context.program->instructions)));
 					}
 					TRY_COMPILE(noop)
+
 					TRY_COMPILE(load)
+
 					TRY_COMPILE(jmp)
-					TRY_COMPILE(cmp_jmp)
-					TRY_COMPILE(eq)
+					TRY_COMPILE(jze)
+					TRY_COMPILE(jnz)
+					TRY_COMPILE(jgt)
+					TRY_COMPILE(jlt)
+					TRY_COMPILE(jge)
+					TRY_COMPILE(jle)
+
+					TRY_COMPILE(sadd)
+					TRY_COMPILE(ssub)
+					TRY_COMPILE(smul)
+					TRY_COMPILE(sdiv)
+					TRY_COMPILE(uadd)
+					TRY_COMPILE(usub)
+					TRY_COMPILE(umul)
+					TRY_COMPILE(udiv)
+
 					TRY_COMPILE(add)
-					TRY_COMPILE(add)
-					TRY_COMPILE(debug_print)
+					TRY_COMPILE(sub)
+					TRY_COMPILE(mul)
+					TRY_COMPILE(div)
+
+					TRY_COMPILE(print_reg)
+					TRY_COMPILE(print_const)
+					TRY_COMPILE(print_string)
+
 					TRY_COMPILE(halt)
 					else {
 						fprintf(stderr, ""CTX_DEBUG_FMT" Unknown instruction '"SV_Fmt"'\n", CTX_DEBUG(&context), SV_Arg(baseInst));
@@ -169,320 +619,16 @@ Program compile_file(const char* file_path) {
 
 	}
 
-	// Resolve any remaining symbols
-	resolve_all_symbols(&context, &program);
+	// Resolve any remaining symbols and generate program headers
+	finaize_program(&context);
 
-	return program;
-}
-
-void process_unresolved_label(Context* context, String_View name, uint8_t* loc) {
-	uint8_t** val = hashmap_get(&context->unresolvedLabels, name.data, name.count);
-	vector_push_back(val, loc);
-	hashmap_put(&context->unresolvedLabels, name.data, name.count, val);
+	// Generate program headers
+	return context.program;
 }
 
 
-typedef struct {
-	Context* ctx;
-	Program* prog;
-} IteratorContext;
 
-static int iterate_over_unresolved_labels(void* const context, struct hashmap_element_s* const e) {
-	String_View key = sv_from_parts(e->key, e->key_len);
-	uint8_t** data = e->data;
-
-	IteratorContext* itCtx = context;
-
-	void* label = hashmap_get(&itCtx->ctx->labels, key.data, key.count);
-	if (label == NULL) {
-		fprintf(stderr, "No '"SV_Fmt"' label found\n", SV_Arg(key));
-		exit(1);
-	} else {
-		uint64_t index = (uint64_t) label;
-
-		uint8_t** it;
-		for (it=vector_begin(data); it!=vector_end(data); ++it) {
-			uint8_t* toReplace = *it;
-
-			uint64_t currIndex = ((void*)toReplace - (void*)*(itCtx->prog)) / sizeof(Inst);
-			int64_t diff = index - currIndex;
-
-			if (diff >= INT8_MIN && diff <=INT8_MAX) {
-				*toReplace = (uint8_t) diff;
-			} else {
-				fprintf(stderr, "Too big jump. Not supported\n");
-				exit(1);
-			}
-		}
-	}
-
-	return 0;
-}
-
-void resolve_all_symbols(Context* context, Program* program) {
-	IteratorContext ctx = { .ctx=context, .prog=program };
-	hashmap_iterate_pairs(&context->unresolvedLabels, iterate_over_unresolved_labels, &ctx);
-}
-
-
-static uint8_t get_register_for_variable(String_View name, Context* context) {
-	void* p = hashmap_get(&context->variables, name.data, name.count);
-	if (p) {
-		return ((uint8_t) p) - 1;
-	} else {
-		fprintf(stderr, ""CTX_DEBUG_FMT" No '"SV_Fmt"' variable declared\n", CTX_DEBUG(context), SV_Arg(name));
-		exit(1);
-	}
-}
-
-static uint8_t get_operand(Context* context, Operand operand, uint8_t* loc) {
-	uint8_t val = 0;
-	switch (operand.type) {
-		case NONE:
-			fprintf(stderr, ""CTX_DEBUG_FMT" Operand expected but not found\n", CTX_DEBUG(context));
-			exit(1);
-		case VAR:
-			val = get_register_for_variable(operand.variable, context);
-			break;
-		case CONST: {
-				uint64_t v = operand.constant;
-				if (v > UINT8_MAX) {
-					fprintf(stderr, ""CTX_DEBUG_FMT" Constant '%lu' too large to fit in 1 byte\n", CTX_DEBUG(context), v);
-					exit(1);
-				}
-				val = (uint8_t) v;
-				break;
-			}
-		case LABEL:
-			if (loc) {
-				process_unresolved_label(context, operand.label, loc);
-				val = 0;
-			} else {
-				fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected label\n", CTX_DEBUG(context));
-				exit(1);
-			}
-			break;
-		default:
-			fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand\n", CTX_DEBUG(context));
-			exit(1);
-	}
-
-	if (loc) {
-		*loc = val;
-	}
-	return val;
-}
-
-static void assert_operand(Context* ctx, Operand op, OperandType type) {
-	if (op.type != type) {
-		fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand. expected %s, found %s\n", ctx->fileName, ctx->lineNo, op.index, describe_operand_type(type), describe_operand_type(op.type));
-		exit(1);
-	}
-}
-
-void compile_noop(Program* program, Context* context, Operand arg1, Operand arg2, Operand arg3) {
-	Inst i = (Inst) {0};
-	assert_operand(context, arg1, NONE);
-	assert_operand(context, arg2, NONE);
-	assert_operand(context, arg3, NONE);
-	vector_push_back(*program, i);
-}
-
-void compile_load(Program* program, Context* context, Operand arg1, Operand arg2, Operand arg3) {
-	Op op;
-	assert_operand(context, arg1, VAR);
-	assert_operand(context, arg3, NONE);
-
-	uint8_t p1 = 0;
-	uint8_t p2 = 0;
-	if (arg2.type == CONST) {
-		uint64_t val = arg2.constant;
-
-		if (val <= UINT8_MAX) {
-			op = OP_LOAD_CONST;
-			p1 = get_operand(context, arg2, NULL);
-		} else if (val <= UINT16_MAX) {
-			op = OP_LOAD_CONST2;
-			p1 = *((uint8_t*)&val + 1);
-			p2 = *((uint8_t*)&val + 0);
-		} else {
-			fprintf(stderr, ""CTX_DEBUG_FMT" Too big constant\n", CTX_DEBUG(context));
-			exit(1);
-		}
-	} else if (arg2.type == VAR) {
-		op = OP_LOAD_REG;
-		p1 = get_operand(context, arg2, NULL);
-	} else {
-		fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand for load\n", CTX_DEBUG(context));
-		exit(1);
-	}
-	uint8_t dest = get_operand(context, arg1, NULL);
-	Inst i = (Inst) { .op=op, .args={dest, p1, p2} };
-	vector_push_back(*program, i);
-}
-
-void compile_jmp(Program* program, Context* context, Operand arg1, Operand arg2, Operand arg3) {
-	Op op;
-	assert_operand(context, arg2, NONE);
-	assert_operand(context, arg3, NONE);
-
-	if (arg1.type == CONST || arg1.type == LABEL) {
-		op = OP_JMP_CONST;
-	} else if (arg1.type == VAR) {
-		op = OP_JMP_REG;
-	} else {
-		fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand for jmp\n", CTX_DEBUG(context));
-		exit(1);
-	}
-
-	Inst i = (Inst) { .op=op, .args={0} };
-	vector_push_back(*program, i);
-	get_operand(context, arg1, &((*program)[vector_size(*program) - 1].args[0]));
-}
-
-void compile_cmp_jmp(Program* program, Context* context, Operand arg1, Operand arg2, Operand arg3) {
-	Op op;
-	assert_operand(context, arg1, VAR);
-
-	if (arg2.type == CONST || arg2.type == LABEL) {
-		op = OP_CMP_JMP_CONST;
-		if (!(arg3.type == CONST || arg3.type == LABEL)) {
-			fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand for cmp_jmp. Expected Constant or Label, found %s\n", CTX_DEBUG(context), describe_operand_type(arg3.type));
-			exit(1);
-		}
-	} else if (arg2.type == VAR) {
-		op = OP_CMP_JMP;
-		assert_operand(context, arg3, VAR);
-	} else {
-		fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand for cmp_jmp\n", CTX_DEBUG(context));
-		exit(1);
-	}
-
-	uint8_t dest = get_operand(context, arg1, NULL);
-	Inst i = (Inst) { .op=op, .args={dest, 0, 0} };
-	vector_push_back(*program, i);
-	get_operand(context, arg2, &((*program)[vector_size(*program) - 1].args[1]));
-	get_operand(context, arg3, &((*program)[vector_size(*program) - 1].args[2]));
-
-}
-
-void compile_eq(Program* program, Context* context, Operand arg1, Operand arg2, Operand arg3) {
-	Op op;
-	assert_operand(context, arg1, VAR);
-	assert_operand(context, arg2, VAR);
-
-	if (arg3.type == CONST) {
-		op = OP_EQ_CONST;
-	} else if (arg3.type == VAR) {
-		op = OP_EQ_REG;
-	} else {
-		fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand for eq\n", CTX_DEBUG(context));
-		exit(1);
-	}
-	uint8_t dest = get_operand(context, arg1, NULL);
-	uint8_t lhs = get_operand(context, arg2, NULL);
-	uint8_t rhs = get_operand(context, arg3, NULL);
-	Inst i = (Inst) { .op=op, .args={dest, lhs, rhs} };
-	vector_push_back(*program, i);
-}
-
-void compile_add(Program* program, Context* context, Operand arg1, Operand arg2, Operand arg3) {
-	Op op;
-	assert_operand(context, arg1, VAR);
-	assert_operand(context, arg2, VAR);
-
-	if (arg3.type == CONST) {
-		op = OP_ADD_CONST;
-	} else if (arg3.type == VAR) {
-		op = OP_ADD_REG;
-	} else {
-		fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand for add\n", CTX_DEBUG(context));
-		exit(1);
-	}
-	uint8_t dest = get_operand(context, arg1, NULL);
-	uint8_t lhs = get_operand(context, arg2, NULL);
-	uint8_t rhs = get_operand(context, arg3, NULL);
-	Inst i = (Inst) { .op=op, .args={dest, lhs, rhs} };
-	vector_push_back(*program, i);
-}
-
-void compile_debug_print(Program* program, Context* context, Operand arg1, Operand arg2, Operand arg3) {
-	assert_operand(context, arg1, VAR);
-	assert_operand(context, arg2, NONE);
-	assert_operand(context, arg3, NONE);
-
-	uint8_t src = get_operand(context, arg1, NULL);
-	Inst i = (Inst) { .op=OP_DEBUG_PRINT, .args={src, 0, 0}};
-	vector_push_back(*program, i);
-}
-
-void compile_halt(Program* program, Context* context, Operand arg1, Operand arg2, Operand arg3) {
-	assert_operand(context, arg1, NONE);
-	assert_operand(context, arg2, NONE);
-	assert_operand(context, arg3, NONE);
-
-	Inst i = (Inst) { .op=OP_HALT, .args={0}};
-	vector_push_back(*program, i);
-}
-
-const char* describe_operand_type(OperandType type) {
-	switch (type) {
-		case NONE: return "None";
-		case VAR: return "Variable";
-		case CONST: return "Constant";
-		case LABEL: return "Label";
-		default: return "Unknown operand";
-	}
-}
-
-void write_prog_to_file(const char* file_path, const char* disasm_file_path, const Program* program) {
-	{
-		FILE* file = fopen(file_path, "wb");
-		if (file == NULL) {
-			fprintf(stderr, "Unable to open file %s, %s\n", file_path, strerror(errno));
-			exit(1);
-		}
-
-		size_t noOfInst = vector_size(*program);
-		size_t itemsWrote = fwrite(*program, sizeof(Inst), noOfInst, file);
-		if (itemsWrote != noOfInst) {
-			fprintf(stderr, "Unable to write to file %s, %s\n", file_path, strerror(errno));
-			exit(1);
-		}
-
-		fclose(file);
-	}
-
-	if (disasm_file_path) {
-		FILE* file = fopen(disasm_file_path, "w");
-		if (file == NULL) {
-			fprintf(stderr, "Unable to open file %s, %s\n", disasm_file_path, strerror(errno));
-			exit(1);
-		}
-
-		size_t noOfInst = vector_size(*program);
-
-		char instStr[MAX_INST_SIZE];
-		for (size_t i=0; i<noOfInst; ++i) {
-			debug_inst(&(*program)[i], instStr, MAX_INST_SIZE);
-			size_t len = strlen(instStr);
-			size_t bytesWrote = fwrite(instStr, sizeof(char), len, file);
-			if (bytesWrote != len) {
-				fprintf(stderr, "Unable to write to file %s, %s\n", file_path, strerror(errno));
-				exit(1);
-			}
-			fwrite("\n", sizeof(char), 1, file);
-		}
-
-		fclose(file);
-
-	}
-}
-
-static bool isNotDot(char ch) {
-	return ch != '.';
-}
-
+// --CODE DUPLICATION START--
 static char* get_file_with_extension(String_View file_path, String_View ext) {
 	sv_chop_right_while(&file_path, isNotDot);
 	char* newName = malloc(sizeof(char) * (file_path.count + ext.count + 1));
@@ -491,11 +637,12 @@ static char* get_file_with_extension(String_View file_path, String_View ext) {
 	newName[file_path.count + ext.count] = '\0';
 	return newName;
 }
+// --CODE DUPLICATION END--
 
 int main(int argc, char* argv[]) {
 
 	if (argc < 2) {
-		printf("Usage: %s <file_path.src> -o <output_file.vm> -d <disassembled.dbg>\n", argv[0]);
+		printf("Usage: %s <file_path.src> -o <output_file.vm>\n", argv[0]);
 		exit(1);
 	}
 
@@ -503,31 +650,20 @@ int main(int argc, char* argv[]) {
 	const char* input_file = argv[1];
 
 	char* output_file = NULL;
-	char* disassemblyFile = NULL;
 
 	while (argc > index) {
-		if (strcmp(argv[index], "-d") == 0) {
-			index += 1;
-			if (argc > index) {
-				disassemblyFile = argv[index];
-				index += 1;
-			} else {
-				disassemblyFile = get_file_with_extension(sv_from_cstr(input_file), sv_from_cstr("dbg"));
-			}
-		} else if (strcmp(argv[index], "-o") == 0) {
+		if (strcmp(argv[index], "-o") == 0) {
 			index += 1;
 			if (argc > index) {
 				output_file = argv[index];
 				index += 1;
-			} else {
-				output_file = get_file_with_extension(sv_from_cstr(input_file), sv_from_cstr("vm"));
 			}
 		}
-	} 
+	}
 	if (!output_file) {
 		output_file = get_file_with_extension(sv_from_cstr(input_file), sv_from_cstr("vm"));
 	}
 	
-	Program program = compile_file(input_file);
-	write_prog_to_file(output_file, disassemblyFile, &program);
+	Program* program = compile_file(input_file);
+	write_prog_to_file(output_file, program);
 }

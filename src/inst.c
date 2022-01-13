@@ -1,96 +1,116 @@
 
 #include <inst.h>
 
-Inst create_inst0(Op type) {
-	return (Inst) { .op=type, .args={0} };
-}
 
-Inst create_inst1(Op type, uint8_t a1) {
-	return (Inst) { .op=type, .args={a1, 0, 0} };
-}
 
-Inst create_inst2(Op type, uint8_t a1, uint8_t a2) {
-	return (Inst) { .op=type, .args={a1, a2, 0} };
-}
+//#define TWO_UI_FMT "%lu %lu"
+//#define THREE_UI_FMT "%lu %lu %lu"
+//#define THREE_UF_FMT "%lu %lu %lf"
+//
+//#define TWO_UI_VAL(inst) (inst)->args[0], (inst)->args[1]
+//#define TWO_UI16_VAL(inst) inst->args[0], UINT16_ARG(inst->args[1], inst->args[2])
+//#define THREE_UI_VAL(inst) (inst)->args[0], (inst)->args[1], (inst)->args[2]
 
-Inst create_inst3(Op type, uint8_t a1, uint8_t a2, uint8_t a3) {
-	return (Inst) { .op=type, .args={a1, a2, a3} };
-}
-
-const char* describe(const Inst* inst) {
-	switch (inst->op) {
-		case OP_NOOP:			return "OP_NOOP";
-
-		case OP_LOAD_CONST: 		return "OP_LOAD_CONST";
-		case OP_LOAD_CONST2: 		return "OP_LOAD_CONST2";
-		case OP_LOAD_REG: 		return "OP_LOAD_REG";
-
-		case OP_JMP_CONST: 		return "OP_JUMP_CONST";
-		case OP_JMP_REG: 		return "OP_JUMP_REG";
-
-		case OP_CMP_JMP_CONST: 		return "OP_COMPARE_JUMP_CONST";
-		case OP_CMP_JMP: 		return "OP_COMPARE_JUMP_REG";
-
-		case OP_EQ_CONST: 		return "OP_COMPARE_EQUAL_CONST";
-		case OP_EQ_REG: 		return "OP_COMPARE_EQUAL_REG";
-
-		case OP_ADD_CONST: 		return "OP_ADD_CONST";
-		case OP_ADD_REG: 		return "OP_ADD_REG";
-
-		case OP_DEBUG_PRINT: 		return "OP_DEBUG_PRINT";
-		case OP_HALT: 			return "HALT";
-		default: 			return "unknown instruction";
-	} 
-}
+#define WRITE_ZERO_OP_INST(i) snprintf(debugStr, strLen, ""#i); break;
+#define WRITE_ONE_UI_OP_INST(i) snprintf(debugStr, strLen, ""#i" %hu", (inst)->args[0]); break;
+#define WRITE_ONE_UI_OP16_INST(i) snprintf(debugStr, strLen, ""#i" %u", UINT16_ARG((inst)->args[0], (inst)->args[1])); break;
+#define WRITE_TWO_UI_OP_INST(i) snprintf(debugStr, strLen, ""#i" %hu %hu", (inst)->args[0], (inst)->args[1]); break;
+#define WRITE_TWO_UI16_OP_INST(i) snprintf(debugStr, strLen, ""#i" %hu %u", (inst)->args[0], UINT16_ARG((inst)->args[1], (inst)->args[2])); break;
+#define WRITE_THREE_UI_OP_INST(i) snprintf(debugStr, strLen, ""#i" %hu %hu %hu", (inst)->args[0], (inst)->args[1], (inst)->args[2]); break;
+#define WRITE_THREE_SI_OP_INST(i) snprintf(debugStr, strLen, ""#i" %hu %hu %hi", (inst)->args[0], (inst)->args[1], (int8_t)(inst)->args[2]); break;
+#define WRITE_THREE_F_OP_INST(i) snprintf(debugStr, strLen, ""#i" %hu %hu %f", (inst)->args[0], (inst)->args[1], (double) (inst)->args[2]); break;
 
 void debug_inst(const Inst* inst, char* debugStr, size_t strLen) {
 	switch (inst->op) {
-		case OP_NOOP:
-			snprintf(debugStr, strLen, "OP_NOOP");
-			break;
-		case OP_LOAD_CONST:
-			snprintf(debugStr, strLen, "OP_LOAD_CONST %u %u", inst->args[0], inst->args[1]);
-			break;
-		case OP_LOAD_CONST2: {
-			uint16_t num = ((uint16_t)inst->args[1]) << 8;
-			snprintf(debugStr, strLen, "OP_LOAD_CONST2 %u %u", inst->args[0], (num + inst->args[2]));
-			break;
-		     }
-		case OP_LOAD_REG:;
-			snprintf(debugStr, strLen, "OP_LOAD_REG %u %u", inst->args[0], inst->args[1]);
-			break;
-		case OP_JMP_CONST: 
-			snprintf(debugStr, strLen, "OP_JMP_CONST %i", *((int8_t*)&inst->args[0]));
-			break;
-		case OP_JMP_REG:
-			snprintf(debugStr, strLen, "OP_JMP_REG %u", inst->args[0]);
-			break;
-		case OP_CMP_JMP_CONST:
-			snprintf(debugStr, strLen, "OP_CMP_JMP_CONST %u %i %i", inst->args[0], *((int8_t*)&inst->args[1]), *((int8_t*)&inst->args[2]));
-			break;
-		case OP_CMP_JMP:
-			snprintf(debugStr, strLen, "OP_CMP_JMP_REG %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
-			break;
-		case OP_EQ_CONST:
-			snprintf(debugStr, strLen, "OP_EQ_CONST %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
-			break;
-		case OP_EQ_REG:
-			snprintf(debugStr, strLen, "OP_EQ_REG %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
-			break;
-		case OP_ADD_CONST:
-			snprintf(debugStr, strLen, "OP_ADD_CONST %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
-			break;
-		case OP_ADD_REG:
-			snprintf(debugStr, strLen, "OP_ADD_REG %u %u %u", inst->args[0], inst->args[1], inst->args[2]);
-			break;
-		case OP_DEBUG_PRINT:
-			snprintf(debugStr, strLen, "OP_DEBUG_PRINT %u", inst->args[0]);
-			break;
-		case OP_HALT:;
-			snprintf(debugStr, strLen, "OP_HALT");
-			break;
-		default:
-			snprintf(debugStr, strLen, "Unknown instruction");
-			break;
+
+		case OP_NOOP: WRITE_ZERO_OP_INST(OP_NOOP)
+	
+		case OP_LOAD_IMPLICIT: WRITE_TWO_UI16_OP_INST(OP_LOAD_IMPLICIT)
+		case OP_LOAD_CONST: WRITE_TWO_UI16_OP_INST(OP_LOAD_CONST)
+		case OP_LOAD_REG: WRITE_TWO_UI_OP_INST(OP_LOAD_REG)
+
+		case OP_JMP_IMPLICIT: WRITE_TWO_UI16_OP_INST(OP_JMP_IMPLICIT)
+		case OP_JMP_CONST: WRITE_TWO_UI16_OP_INST(OP_JMP_CONST)
+		case OP_JMP_REG: WRITE_TWO_UI_OP_INST(OP_JMP_REG)
+
+		case OP_JMP_ZE_IMPLICIT: WRITE_TWO_UI16_OP_INST(OP_JMP_ZE_IMPLICIT)
+		case OP_JMP_ZE_CONST: WRITE_TWO_UI16_OP_INST(OP_JMP_ZE_CONST)
+		case OP_JMP_ZE_REG: WRITE_TWO_UI_OP_INST(OP_JMP_ZE_REG)
+	
+		case OP_JMP_NZ_IMPLICIT: WRITE_TWO_UI16_OP_INST(OP_JMP_NZ_IMPLICIT)
+		case OP_JMP_NZ_CONST: WRITE_TWO_UI16_OP_INST(OP_JMP_NZ_CONST)
+		case OP_JMP_NZ_REG: WRITE_TWO_UI_OP_INST(OP_JMP_NZ_REG)
+	
+		case OP_JMP_GT_IMPLICIT: WRITE_TWO_UI16_OP_INST(OP_JMP_GT_IMPLICIT)
+		case OP_JMP_GT_CONST: WRITE_TWO_UI16_OP_INST(OP_JMP_GT_CONST)
+		case OP_JMP_GT_REG: WRITE_TWO_UI_OP_INST(OP_JMP_GT_REG)
+
+		case OP_JMP_LT_IMPLICIT: WRITE_TWO_UI16_OP_INST(OP_JMP_LT_IMPLICIT)
+		case OP_JMP_LT_CONST: WRITE_TWO_UI16_OP_INST(OP_JMP_LT_CONST)
+		case OP_JMP_LT_REG: WRITE_TWO_UI_OP_INST(OP_JMP_LT_REG)
+	
+		case OP_JMP_GE_IMPLICIT: WRITE_TWO_UI16_OP_INST(OP_JMP_GE_IMPLICIT)
+		case OP_JMP_GE_CONST: WRITE_TWO_UI16_OP_INST(OP_JMP_GE_CONST)
+		case OP_JMP_GE_REG: WRITE_TWO_UI_OP_INST(OP_JMP_GE_REG)
+
+		case OP_JMP_LE_IMPLICIT: WRITE_TWO_UI16_OP_INST(OP_JMP_LE_IMPLICIT)
+		case OP_JMP_LE_CONST: WRITE_TWO_UI16_OP_INST(OP_JMP_LE_CONST)
+		case OP_JMP_LE_REG: WRITE_TWO_UI_OP_INST(OP_JMP_LE_REG)
+
+		case OP_SADD_IMPLICIT: WRITE_THREE_SI_OP_INST(OP_SADD_IMPLICIT)
+		case OP_SADD_CONST: WRITE_THREE_UI_OP_INST(OP_SADD_CONST)
+		case OP_SADD_REG: WRITE_THREE_UI_OP_INST(OP_SADD_REG)
+
+		case OP_UADD_IMPLICIT: WRITE_THREE_UI_OP_INST(OP_UADD_IMPLICIT)
+		case OP_UADD_CONST: WRITE_THREE_UI_OP_INST(OP_UADD_CONST)
+		case OP_UADD_REG: WRITE_THREE_UI_OP_INST(OP_UADD_REG)
+
+		case OP_SSUB_IMPLICIT: WRITE_THREE_SI_OP_INST(OP_SSUB_IMPLICIT)
+		case OP_SSUB_CONST: WRITE_THREE_UI_OP_INST(OP_SSUB_CONST)
+		case OP_SSUB_REG: WRITE_THREE_UI_OP_INST(OP_SSUB_REG)
+	
+		case OP_USUB_IMPLICIT: WRITE_THREE_UI_OP_INST(OP_USUB_IMPLICIT)
+		case OP_USUB_CONST: WRITE_THREE_UI_OP_INST(OP_USUB_CONST)
+		case OP_USUB_REG: WRITE_THREE_UI_OP_INST(OP_USUB_REG)
+	
+		case OP_SMUL_IMPLICIT: WRITE_THREE_SI_OP_INST(OP_SMUL_IMPLICIT)
+		case OP_SMUL_CONST: WRITE_THREE_UI_OP_INST(OP_SMUL_CONST)
+		case OP_SMUL_REG: WRITE_THREE_UI_OP_INST(OP_SMUL_REG)
+	
+		case OP_UMUL_IMPLICIT: WRITE_THREE_UI_OP_INST(OP_UMUL_IMPLICIT)
+		case OP_UMUL_CONST: WRITE_THREE_UI_OP_INST(OP_UMUL_CONST)
+		case OP_UMUL_REG: WRITE_THREE_UI_OP_INST(OP_UMUL_REG)
+	
+		case OP_SDIV_IMPLICIT: WRITE_THREE_SI_OP_INST(OP_SDIV_IMPLICIT)
+		case OP_SDIV_CONST: WRITE_THREE_UI_OP_INST(OP_SDIV_CONST)
+		case OP_SDIV_REG: WRITE_THREE_UI_OP_INST(OP_SDIV_REG)
+
+		case OP_UDIV_IMPLICIT: WRITE_THREE_UI_OP_INST(OP_UDIV_IMPLICIT)
+		case OP_UDIV_CONST: WRITE_THREE_UI_OP_INST(OP_UDIV_CONST)
+		case OP_UDIV_REG: WRITE_THREE_UI_OP_INST(OP_UDIV_REG)
+
+		case OP_ADD_IMPLICIT_UNUSED: WRITE_THREE_F_OP_INST(OP_ADD_IMPLICIT_UNUSED)
+		case OP_ADD_CONST: WRITE_THREE_UI_OP_INST(OP_ADD_CONST) 
+		case OP_ADD_REG: WRITE_THREE_UI_OP_INST(OP_ADD_REG)
+
+		case OP_SUB_IMPLICIT_UNUSED: WRITE_THREE_UI_OP_INST(OP_SUB_IMPLICIT_UNUSED)
+		case OP_SUB_CONST: WRITE_THREE_UI_OP_INST(OP_SUB_CONST)
+		case OP_SUB_REG: WRITE_THREE_UI_OP_INST(OP_SUB_REG)
+	
+		case OP_MUL_IMPLICIT_UNUSED: WRITE_THREE_UI_OP_INST(OP_MUL_IMPLICIT_UNUSED)
+		case OP_MUL_CONST: WRITE_THREE_UI_OP_INST(OP_MUL_CONST)
+		case OP_MUL_REG: WRITE_THREE_UI_OP_INST(OP_MUL_REG)
+	
+		case OP_DIV_IMPLICIT_UNUSED: WRITE_THREE_UI_OP_INST(OP_DIV_IMPLICIT_UNUSED)
+		case OP_DIV_CONST: WRITE_THREE_UI_OP_INST(OP_DIV_CONST)
+		case OP_DIV_REG: WRITE_THREE_UI_OP_INST(OP_DIV_REG)
+
+		case OP_DEBUG_STRING: WRITE_ONE_UI_OP16_INST(OP_DEBUG_STRING)
+		case OP_DEBUG_CONSTANT: WRITE_ONE_UI_OP16_INST(OP_DEBUG_CONSTANT)
+		case OP_DEBUG_REG: WRITE_ONE_UI_OP_INST(OP_DEBUG_REG)
+
+		case OP_HALT: WRITE_ZERO_OP_INST(OP_HALT)
+
+		default: WRITE_ZERO_OP_INST(Unknown instruction)
 	}
 }

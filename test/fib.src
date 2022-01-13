@@ -13,22 +13,21 @@
 	load 		a 	0
 	load 		b 	1
 	
-	debug_print	a
-	debug_print	b
+	print_reg	a
+	print_reg	b
 	
 # Main generation loop
 loop:
 	add 		c 	a 	b
 	load 		a 	b
 	load 		b 	c
-	debug_print	c
+	print_reg 	c
 	
 # Check for loop termination
-	add 		ct 	ct 	1
-	eq 		cmp 	ct 	20
-	cmp_jmp 	cmp 	:end 	:loop
+	uadd 		ct 	ct 	1
+	usub 		cmp 	ct 	20
+	jnz 		cmp 	:loop
 
 # Complete
-end:
 	halt
 

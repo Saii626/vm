@@ -1,0 +1,18 @@
+
+var a
+var b
+var c
+var d
+
+load a "hello world"
+load b 655369
+
+load c "2nd string"
+load d 45.937
+
+print_string a
+print_const b
+
+print_string c
+print_const d
+halt

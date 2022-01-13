@@ -11,7 +11,7 @@ typedef struct {
 	uint64_t ip;
 	bool isHalted;
 
-	uint64_t registers[256];
+	uint64_t registers[UINT8_MAX + 1];
 } VM;
 
 Program load_program_from_file(const char* file_path);

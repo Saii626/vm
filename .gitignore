@@ -1,5 +1,6 @@
 *.o
 vm
 compiler
+decompiler
 test/**.dbg
 test/**.vm
