@@ -1,5 +1,5 @@
 CC = clang
-CFLAGS = -Wall -std=c11 -pedantic -Wswitch-enum -g -Wextra -ggdb
+CFLAGS = -Wall -std=c11 -pedantic -Wswitch-enum -Wextra -ggdb -g
 LIBS = -lm
 
 .PHONY: all
