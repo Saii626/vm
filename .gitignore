@@ -4,3 +4,4 @@ compiler
 decompiler
 test/**.dbg
 test/**.vm
+test/**.out

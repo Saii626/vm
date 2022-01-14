@@ -1,0 +1,40 @@
+
+var base
+var count
+var inc
+var denominator
+var pi_val
+var temp
+var multiplier
+var isSub
+
+# Initialize the variables
+load base 0
+load count 20000
+load denominator 1.0
+load inc 2.0
+load multiplier 4.0
+load pi_val multiplier
+load isSub 1
+
+
+loop:
+	add denominator denominator inc
+	div temp multiplier denominator
+	jze isSub :pos
+
+neg:
+	sub temp base temp
+	load isSub 0
+	jmp :continue
+pos:
+	load isSub 1
+
+continue:
+	add pi_val pi_val temp
+	usub count count 1
+	jnz count :loop
+
+print_reg pi_val
+halt
+

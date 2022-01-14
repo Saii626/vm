@@ -108,13 +108,11 @@ jmp_reg:
 
 // Jump if zero
 jmp_ze_implicit:
-	{
-		if (vm->registers[currInst.args[0]] == 0) {
-			uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
-			ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
-		} else {
-			ip += 1;
-		}
+	if (vm->registers[currInst.args[0]] == 0) {
+		uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
+		ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
+	} else {
+		ip += 1;
 	}
 	NEXT_INSTRUCTION;
 
@@ -137,13 +135,11 @@ jmp_ze_reg:
 
 // Jump if not zero
 jmp_nz_implicit:
-	{
-		if (vm->registers[currInst.args[0]] != 0) {
-			uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
-			ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
-		} else {
-			ip += 1;
-		}
+	if (vm->registers[currInst.args[0]] != 0) {
+		uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
+		ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
+	} else {
+		ip += 1;
 	}
 	NEXT_INSTRUCTION;
 
@@ -166,13 +162,11 @@ jmp_nz_reg:
 
 // Jump if greater than 0
 jmp_gt_implicit:
-	{
-		if ((int64_t)vm->registers[currInst.args[0]] > 0) {
-			uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
-			ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
-		} else {
-			ip += 1;
-		}
+	if ((int64_t)vm->registers[currInst.args[0]] > 0) {
+		uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
+		ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
+	} else {
+		ip += 1;
 	}
 	NEXT_INSTRUCTION;
 
@@ -195,13 +189,11 @@ jmp_gt_reg:
 
 // Jump if less than 0
 jmp_lt_implicit:
-	{
-		if ((int64_t)vm->registers[currInst.args[0]] < 0) {
-			uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
-			ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
-		} else {
-			ip += 1;
-		}
+	if ((int64_t)vm->registers[currInst.args[0]] < 0) {
+		uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
+		ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
+	} else {
+		ip += 1;
 	}
 	NEXT_INSTRUCTION;
 
@@ -224,13 +216,11 @@ jmp_lt_reg:
 
 // Jump if greater than or equal to 0
 jmp_ge_implicit:
-	{
-		if ((int64_t)vm->registers[currInst.args[0]] >= 0) {
-			uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
-			ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
-		} else {
-			ip += 1;
-		}
+	if ((int64_t)vm->registers[currInst.args[0]] >= 0) {
+		uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
+		ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
+	} else {
+		ip += 1;
 	}
 	NEXT_INSTRUCTION;
 
@@ -253,13 +243,11 @@ jmp_ge_reg:
 
 // Jump if less than or equal to 0
 jmp_le_implicit:
-	{
-		if ((int64_t)vm->registers[currInst.args[0]] <= 0) {
-			uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
-			ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
-		} else {
-			ip += 1;
-		}
+	if ((int64_t)vm->registers[currInst.args[0]] <= 0) {
+		uint16_t diff = UINT16_ARG(currInst.args[1], currInst.args[2]);
+		ip = (uint64_t)((int64_t)ip + *(int16_t*)&diff);
+	} else {
+		ip += 1;
 	}
 	NEXT_INSTRUCTION;
 

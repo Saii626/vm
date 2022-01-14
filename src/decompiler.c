@@ -37,7 +37,8 @@ static void debug_write_program(const Program* program, const char* file_path) {
 	fprintf(file, "\n\n[Constants]\n");
 
 	for (size_t i=0; i<program->header.constantsCount; ++i) {
-		fprintf(file, "%lu: %lu\n", i, program->constants[i]);
+		uint64_t contents = program->constants[i];
+		fprintf(file, "unsigned: %lu, signed:%li, float: %lf\n", contents, *(int64_t*)&contents, *(double*)&contents);
 	}
 
 	fprintf(file, "\n\n[Strings]\n");

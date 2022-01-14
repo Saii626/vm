@@ -87,7 +87,7 @@ static int resolve_labels(void* const context, struct hashmap_element_s* const e
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpointer-arith"
-			uint64_t currIndex = ((void*)toReplace - (void*)(ctx->program->instructions)) / sizeof(Inst);
+			uint64_t currIndex = (uint64_t)(((int64_t)((void*)toReplace - (void*)(ctx->program->instructions))) / sizeof(Inst));
 #pragma GCC diagnostic pop
 			int64_t diff = index - currIndex;
 
@@ -283,6 +283,13 @@ static void assert_operand(Context* ctx, Operand op, OperandType type) {
 	}
 }
 
+static void assert_not_variant(Context* ctx, InstVariant variant, InstVariant type, uint64_t loc) {
+	if (variant == type) {
+		fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected operand.\n", ctx->fileName, ctx->lineNo, loc);
+		exit(1);
+	}
+}
+
 static Inst* insert_inst_at_end(Context* context, Inst inst) {
 	Inst* inst_vector = context->program->instructions;
 	vector_push_back(inst_vector, inst);
@@ -329,6 +336,7 @@ static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Oper
 													\
 	resolve_one_byte_arg(context, arg1, ARG_LOC(0)); 						\
 	InstVariant variant = resolve_two_byte_arg(context, arg2, ARG_LOC(1)); 				\
+	assert_not_variant(context, variant, STRING, arg2.index);					\
 	inst->op += variant; 										\
 } 													\
 
@@ -349,6 +357,7 @@ static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Oper
 	resolve_one_byte_arg(context, arg1, ARG_LOC(0)); 						\
 	resolve_one_byte_arg(context, arg2, ARG_LOC(1)); 						\
 	InstVariant variant = resolve_one_byte_arg(context, arg3, ARG_LOC(2)); 				\
+	assert_not_variant(context, variant, STRING, arg3.index);					\
 	inst->op += variant; 										\
 } 													\
 
@@ -361,10 +370,24 @@ COMPILE_BINARY_OPERATION(usub, OP_USUB_IMPLICIT)
 COMPILE_BINARY_OPERATION(umul, OP_UMUL_IMPLICIT)
 COMPILE_BINARY_OPERATION(udiv, OP_UDIV_IMPLICIT)
 
-COMPILE_BINARY_OPERATION(add,  OP_ADD_IMPLICIT_UNUSED)
-COMPILE_BINARY_OPERATION(sub,  OP_SUB_IMPLICIT_UNUSED)
-COMPILE_BINARY_OPERATION(mul,  OP_MUL_IMPLICIT_UNUSED)
-COMPILE_BINARY_OPERATION(div,  OP_DIV_IMPLICIT_UNUSED)
+#define COMPILE_FLOATING_BINARY_OPERATION(fn_name, op_name) 						\
+static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Operand arg3) { 		\
+	Inst* inst = insert_inst_at_end(context, create_inst0( (op_name) )); 				\
+													\
+	assert_operand(context, arg1, VAR); 								\
+	assert_operand(context, arg2, VAR); 								\
+													\
+	resolve_one_byte_arg(context, arg1, ARG_LOC(0)); 						\
+	resolve_one_byte_arg(context, arg2, ARG_LOC(1)); 						\
+	InstVariant variant = resolve_one_byte_arg(context, arg3, ARG_LOC(2)); 				\
+	assert_not_variant(context, variant, STRING, arg3.index); 					\
+	assert_not_variant(context, variant, IMPLICIT, arg3.index); 					\
+	inst->op += variant; 										\
+}
+COMPILE_FLOATING_BINARY_OPERATION(add,  OP_ADD_IMPLICIT_UNUSED)
+COMPILE_FLOATING_BINARY_OPERATION(sub,  OP_SUB_IMPLICIT_UNUSED)
+COMPILE_FLOATING_BINARY_OPERATION(mul,  OP_MUL_IMPLICIT_UNUSED)
+COMPILE_FLOATING_BINARY_OPERATION(div,  OP_DIV_IMPLICIT_UNUSED)
 
 #define COMPILE_DEBUG_PRINT(fn_name, op_name) 								\
 static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Operand arg3) { 			\
@@ -508,6 +531,8 @@ Program* compile_file(const char* file_path) {
 
 	Program* program = malloc(sizeof(Program));
 	context.program = program;
+	// TODO: Fix this. If instructions are reallocated, subsequent label resolution fails
+	vector_grow(program->instructions, 1024);
 	{
 		if (0 != hashmap_create(pow(2, 10), &context.labels)) {
 			fprintf(stderr, "Unable to create label hashmap\n");
