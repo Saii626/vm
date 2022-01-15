@@ -27,48 +27,48 @@ static bool isNotQuote(char ch) {
 	return ch != '"';
 }
 
-static Operand chop_operand(String_View* str, String_View line, uint64_t lineNo) {
+static Operand chop_operand(String_View* str, String_View line, uint64_t lineNo, const char* fileName) {
 	*str = sv_trim_left(*str);
 
 	uint64_t index = str->data - line.data;
 	if (str->count == 0) {
-		return (Operand) { .type=NONE, { .integer=0 }, .lineNo=lineNo, .index=index };
+		return (Operand) { .type=NONE, { .integer=0 }, .lineNo=lineNo, .index=index, .fileName=fileName };
 	}
 	else if (sv_starts_with(*str, sv_from_cstr(":"))) {
 		sv_chop_left(str, 1);
 		String_View name = sv_chop_left_while(str, isNotBlank); 					\
-		return (Operand) { .type=LABEL, { .label=name }, .lineNo=lineNo, .index=index };
+		return (Operand) { .type=LABEL, { .label=name }, .lineNo=lineNo, .index=index, .fileName=fileName };
 	}
 	else if (sv_starts_with(*str, sv_from_cstr("\""))) {
 		sv_chop_left(str, 1); // chop left "
 		String_View string = sv_chop_left_while(str, isNotQuote);
 		sv_chop_left(str, 1); // chop right "
-		return (Operand) { .type=STR, { .string=string }, .lineNo=lineNo, .index=index };
+		return (Operand) { .type=STR, { .string=string }, .lineNo=lineNo, .index=index, .fileName=fileName };
 	}
 	else if (isalpha(*str->data)){
 		String_View name = sv_chop_left_while(str, isNotBlank); 					\
-		return (Operand) { .type=VAR, { .variable=name }, .lineNo=lineNo, .index=index };
+		return (Operand) { .type=VAR, { .variable=name }, .lineNo=lineNo, .index=index, .fileName=fileName };
 	}
 	else {
 		String_View number = sv_chop_left_while(str, isNotBlank); 					\
 		char* lastPos;
 		uint64_t num = (uint64_t) strtol(number.data, &lastPos, 0);
 		if (*lastPos != '.') {
-			return (Operand) { .type=CONST_I, { .integer=num }, .lineNo=lineNo, .index=index };
+			return (Operand) { .type=CONST_I, { .integer=num }, .lineNo=lineNo, .index=index, .fileName=fileName };
 		} else {
 			double num1 = strtod(number.data, NULL);
-			return (Operand) { .type=CONST_F, { .floating=num1 }, .lineNo=lineNo, .index=index };
+			return (Operand) { .type=CONST_F, { .floating=num1 }, .lineNo=lineNo, .index=index, .fileName=fileName };
 		}
 	}
 }
 
 #define TRY_COMPILE(op) \
-	else if (sv_eq(baseInst, sv_from_cstr(#op))) {								\
-		Operand op1 = chop_operand(&inst, line, context.lineNo); 	\
-		Operand op2 = chop_operand(&inst, line, context.lineNo); 	\
-		Operand op3 = chop_operand(&inst, line, context.lineNo); 	\
+	else if (sv_eq(baseInst, sv_from_cstr(#op))) {						\
+		Operand op1 = chop_operand(&inst, line, context.lineNo, context.fileName); 	\
+		Operand op2 = chop_operand(&inst, line, context.lineNo, context.fileName); 	\
+		Operand op3 = chop_operand(&inst, line, context.lineNo, context.fileName); 	\
 		compile_##op(&context, op1, op2, op3); 						\
-	} 													\
+	} 											\
 
 static int resolve_labels(void* const context, struct hashmap_element_s* const e) {
 	String_View key = sv_from_parts(e->key, e->key_len);
@@ -83,20 +83,16 @@ static int resolve_labels(void* const context, struct hashmap_element_s* const e
 		uint64_t index = (uint64_t) label;
 
 		for (size_t i=0; i<vector_size(e->data); ++i) {
-			uint8_t* toReplace = ((uint8_t**)e->data)[i];
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wpointer-arith"
-			uint64_t currIndex = (uint64_t)(((int64_t)((void*)toReplace - (void*)(ctx->program->instructions))) / sizeof(Inst));
-#pragma GCC diagnostic pop
-			int64_t diff = index - currIndex;
+			UnresolvedSymbol toReplace = ((UnresolvedSymbol*)e->data)[i];
+			int64_t diff = (int64_t)index - toReplace.instIndex;
 
 			if (diff >= INT16_MIN && diff <=INT16_MAX) {
 				uint16_t udiff = (uint16_t) diff;
-				*toReplace = (uint8_t) udiff;
-				*(toReplace + 1) = (uint8_t) (udiff >> 8);
+				Inst* toUpdate = &ctx->program->instructions[toReplace.instIndex];
+				toUpdate->args[toReplace.argIndex] = (uint8_t) udiff;
+				toUpdate->args[toReplace.argIndex + 1] = (uint8_t) (udiff >> 8);
 			} else {
-				fprintf(stderr, "Jump size %li too large to fit in 16 bytes\n", (int64_t)diff);
+				fprintf(stderr, ""CTX_DEBUG_FMT" Jump size %li too large to fit in 16 bytes\n", CTX_DEBUG(&toReplace.operand), diff);
 				exit(1);
 			}
 		}
@@ -218,7 +214,7 @@ static InstVariant resolve_one_byte_arg(Context* context, Operand operand, uint8
 	return variant;
 }
 
-static InstVariant resolve_two_byte_arg(Context* context, Operand operand, uint8_t* loc) {
+static InstVariant resolve_two_byte_arg(Context* context, Operand operand, uint8_t instIndex, uint64_t argIndex) {
 	uint16_t val = 0;
 	InstVariant variant = IMPLICIT;
 
@@ -253,15 +249,12 @@ static InstVariant resolve_two_byte_arg(Context* context, Operand operand, uint8
 				break;
 			}
 		case LABEL:
-			if (loc) {
-				uint8_t** usages = hashmap_get(&context->unresolvedLabels, operand.label.data, operand.label.count);
-				vector_push_back(usages, loc);
+			{
+				UnresolvedSymbol* usages = hashmap_get(&context->unresolvedLabels, operand.label.data, operand.label.count);
+				vector_push_back(usages, ((UnresolvedSymbol) { .instIndex=instIndex, .argIndex=argIndex, .operand=operand }));
 				hashmap_put(&context->unresolvedLabels, operand.label.data, operand.label.count, usages);
 				val = 0;
 				variant = IMPLICIT;
-			} else {
-				fprintf(stderr, ""CTX_DEBUG_FMT" Unexpected label\n", CTX_DEBUG(context));
-				exit(1);
 			}
 			break;
 		default:
@@ -269,10 +262,9 @@ static InstVariant resolve_two_byte_arg(Context* context, Operand operand, uint8
 			exit(1);
 	}
 
-	if (loc) {
-		*loc = (uint8_t)val;
-		*(loc + 1) = (uint8_t) (val >> 8);
-	}
+	Inst* toUpdate = &context->program->instructions[instIndex];
+	toUpdate->args[argIndex] = (uint8_t) val;
+	toUpdate->args[argIndex + 1] = (uint8_t) (val >> 8);
 	return variant;
 }
 
@@ -304,6 +296,7 @@ static void compile_noop(Context* context, Operand arg1, Operand arg2, Operand a
 	insert_inst_at_end(context, create_inst0(OP_NOOP));
 }
 
+#define CURRENT_INST_INDEX (vector_size(context->program->instructions) - 1)
 #define ARG_LOC(arg) ((uint8_t*)inst + (arg) + 1)
 
 static void compile_load(Context* context, Operand arg1, Operand arg2, Operand arg3) {
@@ -313,7 +306,7 @@ static void compile_load(Context* context, Operand arg1, Operand arg2, Operand a
 	assert_operand(context, arg3, NONE);
 
 	resolve_one_byte_arg(context, arg1, ARG_LOC(0));
-	InstVariant variant = resolve_two_byte_arg(context, arg2, ARG_LOC(1));
+	InstVariant variant = resolve_two_byte_arg(context, arg2, CURRENT_INST_INDEX, 1);
 	inst->op += variant;
 }
 
@@ -323,7 +316,7 @@ static void compile_jmp(Context* context, Operand arg1, Operand arg2, Operand ar
 	assert_operand(context, arg2, NONE);
 	assert_operand(context, arg3, NONE);
 
-	InstVariant variant = resolve_two_byte_arg(context, arg1, ARG_LOC(0));
+	InstVariant variant = resolve_two_byte_arg(context, arg1, CURRENT_INST_INDEX, 0);
 	inst->op += variant;
 }
 
@@ -335,7 +328,7 @@ static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Oper
 	assert_operand(context, arg3, NONE); 								\
 													\
 	resolve_one_byte_arg(context, arg1, ARG_LOC(0)); 						\
-	InstVariant variant = resolve_two_byte_arg(context, arg2, ARG_LOC(1)); 				\
+	InstVariant variant = resolve_two_byte_arg(context, arg2, CURRENT_INST_INDEX, 1); 		\
 	assert_not_variant(context, variant, STRING, arg2.index);					\
 	inst->op += variant; 										\
 } 													\
@@ -390,13 +383,13 @@ COMPILE_FLOATING_BINARY_OPERATION(mul,  OP_MUL_IMPLICIT_UNUSED)
 COMPILE_FLOATING_BINARY_OPERATION(div,  OP_DIV_IMPLICIT_UNUSED)
 
 #define COMPILE_DEBUG_PRINT(fn_name, op_name) 								\
-static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Operand arg3) { 			\
+static void compile_##fn_name(Context* context, Operand arg1, Operand arg2, Operand arg3) { 		\
 	assert_operand(context, arg1, VAR); 								\
 	assert_operand(context, arg2, NONE); 								\
 	assert_operand(context, arg3, NONE); 								\
 													\
-	Inst* inst = insert_inst_at_end(context, create_inst0( (op_name) )); 				\
-	resolve_two_byte_arg(context, arg1, ARG_LOC(0)); 						\
+	insert_inst_at_end(context, create_inst0( (op_name) )); 					\
+	resolve_two_byte_arg(context, arg1, CURRENT_INST_INDEX, 0); 					\
 } 													\
 
 COMPILE_DEBUG_PRINT(print_reg, OP_DEBUG_REG)
@@ -532,7 +525,7 @@ Program* compile_file(const char* file_path) {
 	Program* program = malloc(sizeof(Program));
 	context.program = program;
 	// TODO: Fix this. If instructions are reallocated, subsequent label resolution fails
-	vector_grow(program->instructions, 1024);
+	// vector_grow(program->instructions, 1024);
 	{
 		if (0 != hashmap_create(pow(2, 10), &context.labels)) {
 			fprintf(stderr, "Unable to create label hashmap\n");

@@ -27,7 +27,7 @@ typedef struct {
 	HashMap strings;           // map of String_View -> uint16_t index in strings table
 
 	HashMap labels;            // map of String_View -> uint64_t instruction index
-	HashMap unresolvedLabels;  // map of String_View -> array of uint8_t* containg all positions where the label is used
+	HashMap unresolvedLabels;  // map of String_View -> array of UnresolvedSymbol containg all positions where the label is used
 
 
 	Program* program;
@@ -57,6 +57,7 @@ typedef struct {
 	};
 
 	// Debug info to refer to when an error is encountered
+	const char* fileName;
 	uint64_t lineNo;
 	uint64_t index;
 } Operand;
@@ -67,6 +68,12 @@ typedef enum {
 	REG,
 	STRING,
 } InstVariant;
+
+typedef struct {
+	uint64_t instIndex;
+	Operand operand;
+	uint8_t argIndex;
+} UnresolvedSymbol;
 
 Program* compile_file(const char* file_path);
 
